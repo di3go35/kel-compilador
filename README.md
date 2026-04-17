@@ -93,7 +93,7 @@ Makefile
 ## Documentación
 
 La especificación completa del lenguaje (tokens, gramática, tipos, decisiones
-de diseño) está en [`CLAUDE.md`](CLAUDE.md).
+de diseño, roadmap) está en [`SPEC.md`](SPEC.md).
 
 ## Equipo
 
