@@ -1,0 +1,4 @@
+// Falta '{' en función
+fn main()
+  val x = 5
+}

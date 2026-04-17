@@ -1,0 +1,30 @@
+// Casos con errores semánticos
+
+fn suma(a: int, b: int) -> int {
+  return a + b
+}
+
+fn main() {
+  val x = 5
+  x = 10                     // error: val no reasignable
+
+  var y: int = "hola"        // error: tipo incompatible
+
+  val z = desconocida         // error: variable no declarada
+
+  val a = 1 + "texto"         // error: operador no aplicable
+
+  if 5 {                      // error: cond debe ser bool
+    println("hola")
+  }
+
+  val r = suma(1)             // error: aridad incorrecta
+  val r2 = suma(1, "dos")     // error: tipo de arg
+  val r3 = noexiste(1)        // error: función no definida
+
+  val arr: [int] = [1, 2, "tres"]  // error: elemento heterogéneo
+
+  val n = arr["x"]            // error: índice no int
+
+  return 5                    // error: main es void
+}

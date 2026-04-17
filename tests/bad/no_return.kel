@@ -1,0 +1,10 @@
+// Función no retorna en todas las rutas
+fn buggy(x: int) -> int {
+  if x > 0 {
+    return 1
+  }
+}
+
+fn main() {
+  println(buggy(1))
+}

@@ -1,0 +1,4 @@
+// Array vacío sin tipo esperado → error
+fn main() {
+  val a = []     // sin decl_type: indeterminado
+}

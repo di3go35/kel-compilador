@@ -1,0 +1,4 @@
+// Caracter ilegal
+fn main() {
+  val x = @5
+}

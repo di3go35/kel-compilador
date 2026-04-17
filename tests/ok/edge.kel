@@ -1,0 +1,18 @@
+// Forward reference + recursión + shadowing
+fn main() {
+  val r = fact(5)            // forward reference
+  println(r)
+
+  val x = 1
+  if true {
+    val x = 2                // shadowing permitido en sub-scope
+    println(x)
+  }
+}
+
+fn fact(n: int) -> int {
+  if n <= 1 {
+    return 1
+  }
+  return n * fact(n - 1)     // recursión
+}

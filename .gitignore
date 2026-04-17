@@ -1,0 +1,36 @@
+# Binarios compilados
+kelc
+kelc.exe
+kelc_asan
+kelc_asan.exe
+
+# Objetos y artefactos de compilación
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.out
+
+# Debug / símbolos
+*.pdb
+*.ilk
+*.dSYM/
+
+# Editores / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs de salida de tests (por si alguien los redirige)
+*.log
+
+# Estado local de Claude Code
+.claude/

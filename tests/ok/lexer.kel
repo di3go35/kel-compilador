@@ -1,0 +1,33 @@
+// Programa de prueba para el lexer de Kel
+/* Cubre todas las categorías de tokens */
+
+fn suma(a: int, b: int) -> int {
+  return a + b
+}
+
+fn main() {
+  val nombre = "Diego"
+  var puntaje: int = 0
+  val pi: float = 3.1415
+
+  val nums: [int] = [1, 2, 3]
+  val tags = ["a", "b", "c"]
+
+  for i in 0..3 {
+    puntaje = suma(puntaje, nums[i])
+  }
+
+  var x = 0
+  while x < 10 {
+    x = x + 1
+  }
+
+  if puntaje >= 5 && x != 0 {
+    println("Hola, " + nombre)
+  } else {
+    println("Puntaje bajo")
+  }
+
+  val flag: bool = !false || true
+  val r = 10 % 3
+}

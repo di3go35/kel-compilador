@@ -1,0 +1,19 @@
+// Arrays vacíos con hint de tipo del contexto
+
+fn toma(a: [int]) -> int {
+  return 0
+}
+
+fn produce() -> [string] {
+  return []                     // hint: ret_type
+}
+
+fn main() {
+  val a: [int] = []             // hint: decl_type
+  var b: [bool] = []            // hint: decl_type
+  b = []                        // hint: sy->type
+
+  val r = toma([])              // hint: param type
+  val s = produce()
+  println(r)
+}
