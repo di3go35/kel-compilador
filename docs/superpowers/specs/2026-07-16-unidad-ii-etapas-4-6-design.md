@@ -100,7 +100,12 @@ símbolos en el log y las firmas de los built-ins `read_*`.
 
 Traducción del AST anotado a TAC. La mayoría es directa (`N_BINOP` → `IR_BINOP`,
 `N_CALL` → `IR_PARAM`×n + `IR_CALL`, `N_IF`/`N_WHILE` → etiquetas y saltos).
-`for i in a..b` se desazucara a init + condición + incremento.
+`for i in a..b` se desazucara a init + condición + incremento, y **`b` se evalúa
+una sola vez** (decidido durante el Plan 2, commit `bcb6724`): el cálculo del fin
+se saca antes de la etiqueta de condición, y si es una variable se copia a un
+temporal — con la semántica de C, que reevalúa, `for i in 0..n { n = n + 1 }`
+era un bucle infinito. Documentado en SPEC.md, "El `for` de Kel no es el `for`
+de C".
 
 ### Cambios necesarios sobre el esqueleto de `codegen.h`
 

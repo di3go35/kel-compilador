@@ -1304,6 +1304,19 @@ del AST, no del KelType, que no lo guarda."
 
 ## Task 8: Control de flujo — `if`, `while`, `for`
 
+> **Corregido tras la implementación (commit `bcb6724`).** El snippet del `for`
+> de abajo genera `range_end` DENTRO del bucle, después de `L_cond` — la
+> semántica del `for` de C, que reevalúa el fin en cada vuelta. Diego decidió la
+> semántica contraria: **el fin se evalúa una sola vez**, como en Rust y Kotlin,
+> de donde viene la sintaxis `0..3`. Con el snippet original,
+> `for i in 0..n { n = n + 1 }` era un bucle infinito y `for i in 0..limite()`
+> llamaba a `limite()` en cada iteración. El código final saca `gen_expr(range_end)`
+> antes de `L_cond` y, si el fin es una variable, lo copia a un temporal (para
+> una variable `gen_expr` no emite nada, así que solo moverlo no bastaba).
+> `flujo.kel` lleva ahora el caso del bucle infinito como regresión, y SPEC.md
+> lo documenta en "El `for` de Kel no es el `for` de C". Los snippets de abajo
+> conservan el texto original; la verdad está en `ir.c`.
+
 **Files:** `src/ir.c`, `tests/ir/flujo.kel`, `tests/ir/flujo.expected`
 
 - [ ] **Step 1: Escribir el test**

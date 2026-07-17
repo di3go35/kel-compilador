@@ -117,9 +117,9 @@ typedef struct {
     /* "+", "-", ... para BINOP/UNOP; o nombre de fn para IR_CALL.
      * no-owned, y de procedencia mixta: casi siempre apunta a cadenas del AST
      * (Node.op, Node.str_val, que el AST sí posee y libera), pero a veces a un
-     * literal estático — el "<" que ir.c fabrica al desazucarar el `for` no
-     * viene de ningún nodo. Nunca se libera: ni free() sobre un literal, ni
-     * doble free sobre lo que el AST ya libera. */
+     * literal estático — el "<" y el "+" que ir.c fabrica al desazucarar el
+     * `for` no vienen de ningún nodo. Nunca se libera: ni free() sobre un
+     * literal, ni doble free sobre lo que el AST ya libera. */
     const char* sym;
 } Instr;
 
@@ -147,6 +147,14 @@ typedef struct {
  * apuntan al AST sin poseerlo, y los ADDR_VAR / ADDR_CONST_STR apuntan a
  * cadenas del AST. El AST debe seguir vivo mientras se use el IRProgram:
  * llama a kel_free_ast() DESPUÉS de kel_ir_free(), nunca antes.
+ *
+ * AVISO PARA LA ETAPA 6 — colisión de nombres t1, t2...: en Kel, `t1` es un
+ * nombre de variable legal, y en el `--ir` sería textualmente idéntico al
+ * temporal t1. Aquí no chocan (ADDR_VAR y ADDR_TEMP son kinds distintos), pero
+ * al emitir C los dos se convertirían en el identificador `t1`. emit_c.c debe
+ * ponerles prefijo a los temporales (p.ej. `_t1`) o a las variables. El golden
+ * de flujo.kel usa una variable llamada `t` a propósito para dejar esto a la
+ * vista.
  *
  * HUECO CONOCIDO — el temporal de la condición del `for`: `for i in a..b` se
  * desazucara a una comparación `i < b` que **no existe en el AST**, así que no
