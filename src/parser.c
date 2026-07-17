@@ -619,7 +619,6 @@ static void print_node(const Node* n, int d) {
         case N_BOOL_LIT:  printf("Bool %s", n->bool_val ? "true" : "false"); print_type_suffix(n); printf("\n"); break;
         case N_STR_LIT:   printf("Str \"%s\"", n->str_val); print_type_suffix(n); printf("\n"); break;
         case N_IDENT:     printf("Ident '%s'", n->str_val); print_type_suffix(n); printf("\n"); break;
-        case N_PRINTLN:   printf("Println\n"); break;
     }
 }
 

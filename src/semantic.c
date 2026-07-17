@@ -284,6 +284,19 @@ static void register_builtins(Sem* S) {
     }
 }
 
+int kel_is_read_builtin(const char* name) {
+    for (size_t i = 0; i < KEL_N_BUILTINS; i++)
+        if (strcmp(name, kel_builtins[i].name) == 0) return 1;
+    return 0;
+}
+
+/* println no está en kel_builtins[] (esa tabla es solo de los read_*, que se
+ * registran como firmas); se maneja aparte en check_call, así que aquí se
+ * comprueba explícitamente. */
+int kel_is_builtin(const char* name) {
+    return strcmp(name, "println") == 0 || kel_is_read_builtin(name);
+}
+
 /* ---------- Check de expresiones: retorna KelType* owned ---------- */
 
 static KelType* check_expr(Sem* S, Node* n);
