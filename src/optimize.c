@@ -222,11 +222,55 @@ static int local_pass(IRFunction* f) {
     return changed;
 }
 
+/* Cuenta lecturas de cada temporal (id 1..n_temps). op1 y op2 siempre son
+ * fuentes; en IR_INDEX_STORE, dst TAMBIÉN es fuente (op1[op2] = dst, ver ir.h). */
+static void count_temp_reads(const Instr* in, unsigned* reads, size_t nt) {
+    const Addr* srcs[3]; int k = 0;
+    srcs[k++] = &in->op1;
+    srcs[k++] = &in->op2;
+    if (in->op == IR_INDEX_STORE) srcs[k++] = &in->dst;
+    for (int s = 0; s < k; s++)
+        if (srcs[s]->kind == ADDR_TEMP && srcs[s]->i >= 1
+                && (size_t)srcs[s]->i <= nt)
+            reads[srcs[s]->i]++;
+}
+
+/* ¿Escribe un temporal muerto y sin efectos? Solo estas cinco lo son: CALL y
+ * READ escriben pero tienen efectos, así que se conservan aunque su dst no se
+ * lea. */
+static int is_dead_temp_write(const Instr* in, const unsigned* reads, size_t nt) {
+    if (in->dst.kind != ADDR_TEMP) return 0;
+    if (in->dst.i < 1 || (size_t)in->dst.i > nt) return 0;
+    if (reads[in->dst.i] != 0) return 0;
+    switch (in->op) {
+        case IR_COPY: case IR_BINOP: case IR_UNOP:
+        case IR_INDEX_LOAD: case IR_ARRAY_NEW: return 1;
+        default: return 0;
+    }
+}
+
+static int dce_pass(IRFunction* f) {
+    size_t nt = f->n_temps;
+    unsigned* reads = (unsigned*)calloc(nt + 1, sizeof(unsigned));
+    for (size_t j = 0; j < f->count; j++)
+        count_temp_reads(&f->body[j], reads, nt);
+    size_t w = 0; int changed = 0;
+    for (size_t j = 0; j < f->count; j++) {
+        if (is_dead_temp_write(&f->body[j], reads, nt)) { changed = 1; continue; }
+        f->body[w++] = f->body[j];
+    }
+    f->count = w;
+    free(reads);
+    return changed;
+}
+
 OptStats kel_optimize(IRProgram* p) {
     OptStats st;
     st.instr_before = count_instrs(p);
-    for (size_t i = 0; i < p->count; i++)
+    for (size_t i = 0; i < p->count; i++) {
         local_pass(&p->fns[i]);
+        dce_pass(&p->fns[i]);
+    }
     st.instr_after = count_instrs(p);
     return st;
 }
