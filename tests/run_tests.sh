@@ -99,6 +99,42 @@ for f in tests/ir/*.kel; do
 done
 
 echo
+echo "== tests/run (end-to-end: kelc -> gcc -> ejecutar) =="
+E2E_DIR="$(mktemp -d)"
+for f in tests/run/*.kel; do
+    [ -e "$f" ] || continue
+    exp="${f%.kel}.expected"
+    if [ ! -e "$exp" ]; then
+        fail=$((fail+1))
+        fails+=("$f (falta $exp)")
+        printf "  FAIL %s (falta %s)\n" "$f" "$exp"
+        continue
+    fi
+    base="$(basename "${f%.kel}")"
+    cfile="$E2E_DIR/$base.c"
+    exe="$E2E_DIR/$base.exe"
+    if ! "$KELC" --emit-c "$f" > "$cfile" 2>/dev/null; then
+        fail=$((fail+1)); fails+=("$f (kelc --emit-c falló)")
+        printf "  FAIL %s (kelc --emit-c falló)\n" "$f"; continue
+    fi
+    # El requisito de §5.4.2 solo vale si un test lo hace fallar:
+    if ! gcc -Wall -Wextra -Werror -o "$exe" "$cfile" 2> "$E2E_DIR/$base.gcc.log"; then
+        fail=$((fail+1)); fails+=("$f (el C generado no compila limpio)")
+        printf "  FAIL %s (gcc rechazó el C generado):\n" "$f"
+        sed 's/^/    /' "$E2E_DIR/$base.gcc.log"; continue
+    fi
+    # tr -d '\r' en los dos lados: ver la nota de tests/symbols.
+    got=$("$exe" < /dev/null | tr -d '\r')
+    if [ "$got" = "$(cat "$exp" | tr -d '\r')" ]; then
+        pass=$((pass+1)); printf "  ok   %s\n" "$f"
+    else
+        fail=$((fail+1)); fails+=("$f (salida distinta)")
+        printf "  FAIL %s\n    --- esperado ---\n%s\n    --- obtenido ---\n%s\n" "$f" "$(cat "$exp" | tr -d '\r')" "$got"
+    fi
+done
+rm -rf "$E2E_DIR"
+
+echo
 echo "Resultado: $pass pasaron, $fail fallaron."
 if [ "$fail" -ne 0 ]; then
     echo "Fallos:"

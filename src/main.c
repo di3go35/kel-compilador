@@ -4,6 +4,7 @@
 #include "diag.h"
 #include "symtab.h"
 #include "ir.h"
+#include "emit_c.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,7 @@ static void usage(FILE* out, const char* prog) {
         "  --ast       Muestra el AST con tipos inferidos (Etapa 2 + 3)\n"
         "  --symbols   Muestra la tabla de símbolos (Etapa 3)\n"
         "  --ir        Muestra el código intermedio TAC (Etapa 4)\n"
+        "  --emit-c    Imprime el C generado (Etapa 6)\n"
         "  --sem       Solo reporta resultado del análisis semántico\n"
         "  -h, --help  Muestra esta ayuda\n"
         "\n"
@@ -37,6 +39,7 @@ static void usage(FILE* out, const char* prog) {
 int main(int argc, char** argv) {
     const char* path = NULL;
     int show_tokens = 0, show_ast = 0, show_sem = 0, show_symbols = 0, show_ir = 0;
+    int emit_c_flag = 0;
 
     for (int i = 1; i < argc; i++) {
         if      (strcmp(argv[i], "--tokens") == 0) show_tokens = 1;
@@ -44,6 +47,7 @@ int main(int argc, char** argv) {
         else if (strcmp(argv[i], "--sem") == 0)    show_sem = 1;
         else if (strcmp(argv[i], "--symbols") == 0) show_symbols = 1;
         else if (strcmp(argv[i], "--ir") == 0)      show_ir = 1;
+        else if (strcmp(argv[i], "--emit-c") == 0)  emit_c_flag = 1;
         else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             usage(stdout, argv[0]);
             return 0;
@@ -87,14 +91,15 @@ int main(int argc, char** argv) {
                 rc = 1;
             } else if (show_sem) {
                 printf("Semántico OK\n");
-            } else if (!show_tokens && !show_ast && !show_symbols && !show_ir) {
+            } else if (!show_tokens && !show_ast && !show_symbols && !show_ir && !emit_c_flag) {
                 printf("Lexer OK — %zu tokens\nParser OK\nSemántico OK\n", tokens.count);
             }
             /* El IR se genera ANTES de kel_free_ast: IRFunction.params,
              * ret_type y los Addr.type apuntan al AST sin poseerlo. */
-            if (!sr.had_error && show_ir) {
+            if (!sr.had_error && (show_ir || emit_c_flag)) {
                 IRProgram ir = kel_gen(pr.root);
-                kel_ir_print(&ir);
+                if (show_ir)     kel_ir_print(&ir);
+                if (emit_c_flag) kel_emit_c(&ir, stdout);
                 kel_ir_free(&ir);
             }
         }
