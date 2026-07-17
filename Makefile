@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Wpedantic -std=c11 -g
+CFLAGS = -Wall -Wextra -Wpedantic -std=gnu11 -g -D__USE_MINGW_ANSI_STDIO
 SRC = src/main.c src/lexer.c src/parser.c src/semantic.c src/diag.c src/symtab.c src/ir.c src/emit_c.c src/optimize.c
 OUT = kelc
 

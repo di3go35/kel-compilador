@@ -1,0 +1,49 @@
+// Figura 10: AFD combinado de constantes enteras y flotantes
+// Basado en scan_number() — lexer.c:118-131
+// Compilar: dot -Tpng -O figura10_afd_numeros.dot
+
+digraph AFD_Number {
+    rankdir=LR;
+    bgcolor="white";
+    nodesep=0.6;
+    ranksep=0.8;
+    fontname="Arial";
+    fontsize=11;
+
+    node [fontname="Arial", fontsize=10];
+
+    // Estados
+    q0 [label="q0", shape=circle, style=filled, fillcolor="#C6EFCE"];
+    q1 [label="q1", shape=circle, style=filled, fillcolor="#FFF2CC"];
+    q2 [label="q2", shape=circle, style=filled, fillcolor="#F4CCCC"];
+    q3 [label="q3", shape=circle, style=filled, fillcolor="#FFF2CC"];
+
+    accept_int [label="TOKEN_INT_LIT", shape=box, style="rounded,filled", fillcolor="#D9E2F3"];
+    accept_float [label="TOKEN_FLOAT_LIT", shape=box, style="rounded,filled", fillcolor="#D9E2F3"];
+
+    // Transiciones
+    q0 -> q1 [label="[0-9]"];
+    q1 -> q1 [label="[0-9]\n(bucle: parte entera)"];
+    q1 -> accept_int [label="otro carácter\n(no dígito, no '.')"];
+
+    // Transición crítica: punto solo si va seguido de dígito
+    q1 -> q2 [label="'.' Y dígito\nsiguiente"];
+
+    // q2 NO es de aceptación — exige al menos un dígito decimal
+    q2 -> q3 [label="[0-9]"];
+
+    q3 -> q3 [label="[0-9]\n(bucle: parte decimal)"];
+    q3 -> accept_float [label="otro carácter"];
+
+    // Nota sobre q2
+    q2 [xlabel="q2 no es de aceptación:\nexige dígito tras el punto"];
+
+    // Leyenda
+    subgraph cluster_leyenda {
+        label="Rangos de aceptación";
+        style=dashed;
+        fontsize=10;
+        node [shape=plaintext, fillcolor=white, fontsize=9];
+        nota [label="Entero: q1 → TOKEN_INT_LIT\nFlotante: q3 → TOKEN_FLOAT_LIT\nq0 → Inicio | q2 → Punto decimal (no acepta)"];
+    }
+}

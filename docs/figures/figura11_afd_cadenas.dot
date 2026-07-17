@@ -1,0 +1,36 @@
+// Figura 11: AFD de cadenas
+// Basado en scan_string() — lexer.c:133-151
+// Compilar: dot -Tpng -O figura11_afd_cadenas.dot
+
+digraph AFD_String {
+    rankdir=LR;
+    bgcolor="white";
+    nodesep=0.6;
+    ranksep=0.8;
+    fontname="Arial";
+    fontsize=11;
+
+    node [fontname="Arial", fontsize=10];
+
+    // Estados
+    q0 [label="q0", shape=circle, style=filled, fillcolor="#C6EFCE"];
+    q1 [label="q1", shape=circle, style=filled, fillcolor="#FFF2CC"];
+    q2 [label="q2", shape=doublecircle, style=filled, fillcolor="#D9E2F3"];
+
+    // Estado de error (dos formas)
+    error [label="Error:\ncadena sin cerrar", shape=box, style="rounded,filled", fillcolor="#F4CCCC"];
+
+    // Transiciones
+    q0 -> q1 [label="'\"'\n(comilla de apertura)"];
+    q1 -> q1 [label="[^'\\n\"]\n(bucle: contenido)"];
+    q1 -> q2 [label="'\"'\n(aceptación: TOKEN_STR_LIT)"];
+
+    // Estados de error
+    q1 -> error [label="\\n (salto de línea)\n→ error: cadena sin cerrar"];
+    q1 -> error [label="EOF (fin de archivo)\n→ error: cadena sin cerrar\nal final del archivo"];
+
+    // Anotación
+    label="Sub-autómata de cadenas";
+    labelloc=t;
+    fontsize=12;
+}

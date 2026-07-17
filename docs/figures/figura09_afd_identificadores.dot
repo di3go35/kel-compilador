@@ -1,0 +1,29 @@
+// Figura 9: AFD de identificadores
+// Basado en scan_identifier() — lexer.c:105-112
+// Compilar: dot -Tpng -O figura09_afd_identificadores.dot
+
+digraph AFD_Ident {
+    rankdir=LR;
+    bgcolor="white";
+    nodesep=0.6;
+    ranksep=0.8;
+    fontname="Arial";
+    fontsize=11;
+
+    node [fontname="Arial", fontsize=10];
+
+    // Estados
+    q0 [label="q0", shape=circle, style=filled, fillcolor="#C6EFCE"];
+    q1 [label="q1", shape=circle, style=filled, fillcolor="#FFF2CC"];
+    acept [label="Aceptación:\nlookup en tabla\nde keywords", shape=box, style="rounded,filled", fillcolor="#D9E2F3"];
+
+    // Transiciones
+    q0 -> q1 [label="[a-zA-Z_]\n(letra o _)"];
+    q1 -> q1 [label="[a-zA-Z0-9_]\n(letra | dígito | _)"];
+    q1 -> acept [label="otro carácter\n(no letra, no dígito, no _)"];
+
+    // Anotación
+    label="Sub-autómata de identificadores y palabras clave";
+    labelloc=t;
+    fontsize=12;
+}
