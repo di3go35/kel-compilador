@@ -20,7 +20,7 @@
  *     t3 = t1                 ; IR_COPY
  *     t4 = arr[i]             ; IR_INDEX_LOAD
  *     arr[i] = t1             ; IR_INDEX_STORE
- *     t6 = array[3]           ; IR_ARRAY_NEW  (reserva, no inicializa)
+ *     t6 = alloc int[3]       ; IR_ARRAY_NEW  (reserva, no inicializa)
  *     param t1                ; IR_PARAM
  *     t5 = call suma, 2       ; IR_CALL  (nargs = 2)
  *     if t1 goto L2           ; IR_IF_GOTO
@@ -67,7 +67,7 @@ typedef enum {
     IR_COPY,              /* dst = op1 */
     IR_BINOP,             /* dst = op1 <op> op2 ; op string "+" ... */
     IR_UNOP,              /* dst = <op> op1 */
-    IR_ARRAY_NEW,         /* dst = array[op1]  (op1 = nº de elementos, const int) */
+    IR_ARRAY_NEW,         /* dst = alloc <tipo>[op1]  (op1 = nº elementos, const int) */
     IR_INDEX_LOAD,        /* dst = op1[op2] */
     IR_INDEX_STORE,       /* op1[op2] = dst  (dst es la fuente) */
     IR_PARAM,             /* push arg op1 */
@@ -95,8 +95,8 @@ typedef struct {
     KelType* ret_type;      /* no-owned; apunta al AST */
     Instr*   body;          /* owned */
     size_t   count, capacity;
-    int      n_temps;       /* temporales usados: t1..t_temps */
-    int      n_labels;      /* etiquetas usadas: L1..L_labels */
+    size_t   n_temps;       /* temporales usados: t1..t_temps */
+    size_t   n_labels;      /* etiquetas usadas: L1..L_labels */
 } IRFunction;
 
 typedef struct {
@@ -112,6 +112,12 @@ typedef struct {
  *
  * API de la Etapa 5 (optimize.c) — Plan 4.
  * API de la Etapa 6 (emit_c.c)   — Plan 3.
+ *
+ * CUIDADO — tiempo de vida: IRFunction.params y ret_type apuntan al AST sin
+ * poseerlo, así que el AST debe seguir vivo mientras se use el IRProgram.
+ * main.c libera el AST con kel_free_ast() justo tras el semántico; al conectar
+ * kel_gen habrá que mover esa llamada detrás de la generación de IR y de la
+ * emisión de C, o emit_c.c leerá memoria liberada.
  */
 
 #endif
