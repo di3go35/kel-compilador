@@ -109,7 +109,10 @@ static void emit_fn_signature(FILE* out, const IRFunction* f) {
     for (size_t i = 0; i < f->param_count; i++) {
         if (i) fprintf(out, ", ");
         c_type(out, f->params[i].type);
-        fprintf(out, " k_%s", f->params[i].name);
+        /* __attribute__((unused)): una función de Kel puede ignorar un
+         * parámetro (código legal en el fuente); sin la marca,
+         * -Wunused-parameter con -Werror rechazaría el C generado. */
+        fprintf(out, " k_%s __attribute__((unused))", f->params[i].name);
     }
     fprintf(out, f->param_count ? ")" : "void)");
 }
@@ -163,8 +166,9 @@ static int is_param(const IRFunction* f, const char* name) {
 }
 
 static void emit_declarations(FILE* out, const IRFunction* f) {
-    /* temporales: el primer dst ADDR_TEMP fija tipo; IR_ARRAY_NEW declara
-     * arreglo nativo (tamaño del op1; 0 -> 1: T t[0] es extensión de gcc) */
+    /* Un temporal se declara con el tipo de su primer dst. Los de IR_ARRAY_NEW
+     * son punteros (su KelType es [T] -> T*): el arreglo se reserva en el heap
+     * al ejecutar la instrucción, no aquí. Todo a 0. */
     unsigned char* seen = (unsigned char*)calloc(f->n_temps + 1, 1);
     for (size_t j = 0; j < f->count; j++) {
         const Instr* in = &f->body[j];
@@ -172,15 +176,9 @@ static void emit_declarations(FILE* out, const IRFunction* f) {
         long long id = in->dst.i;
         if (seen[id]) continue;
         seen[id] = 1;
-        if (in->op == IR_ARRAY_NEW) {
-            fprintf(out, "    ");
-            c_type(out, in->dst.type ? in->dst.type->elem : NULL);
-            fprintf(out, " t%lld[%lld];\n", id, in->op1.i > 0 ? in->op1.i : 1);
-        } else {
-            fprintf(out, "    ");
-            c_type(out, in->dst.type);   /* NULL -> long long (bool del for) */
-            fprintf(out, " t%lld = 0;\n", id);
-        }
+        fprintf(out, "    ");
+        c_type(out, in->dst.type);   /* NULL -> long long (bool del for) */
+        fprintf(out, " t%lld = 0;\n", id);
     }
     free(seen);
     /* variables de usuario (dst ADDR_VAR de COPY/READ), sin duplicar */
@@ -319,10 +317,21 @@ static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
                 default:        fprintf(out, " = kel_read_int();\n"); break;
             }
             break;
-        case IR_ARRAY_NEW:
-            /* Nada: la declaración del temporal ya reservó el arreglo
-             * nativo (emit_declarations). */
+        case IR_ARRAY_NEW: {
+            /* Heap, no pila: una función puede devolver un arreglo
+             * (produce() -> [T]), y uno en la pila colgaría al volver
+             * (-Wreturn-local-addr, y UB de verdad). malloc y nunca free:
+             * como kel_concat, Kel v1 no tiene GC. Tamaño 0 (val v: [T] = [])
+             * pide al menos 1: malloc(0) es de resultado indefinido. */
+            long long n = in->op1.i > 0 ? in->op1.i : 1;
+            fprintf(out, "    ");
+            c_addr(out, &in->dst); fprintf(out, " = (");
+            c_type(out, in->dst.type);
+            fprintf(out, ")malloc(%lld * sizeof(", n);
+            c_type(out, in->dst.type ? in->dst.type->elem : NULL);
+            fprintf(out, "));\n");
             break;
+        }
         case IR_INDEX_LOAD:
             fprintf(out, "    ");
             c_addr(out, &in->dst); fprintf(out, " = ");
