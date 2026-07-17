@@ -109,8 +109,12 @@ Makefile
 
 ## Documentación
 
-La especificación completa del lenguaje (tokens, gramática, tipos, decisiones
-de diseño, roadmap) está en [`SPEC.md`](SPEC.md).
+- [`SPEC.md`](SPEC.md) — especificación completa del lenguaje (tokens, gramática,
+  tipos, decisiones de diseño, roadmap).
+- [`docs/GRAMMAR.md`](docs/GRAMMAR.md) — gramática BNF/EBNF y análisis de
+  ambigüedad, derivada de `parser.c`.
+- [`docs/AUTOMATA.md`](docs/AUTOMATA.md) — expresiones regulares y autómatas del
+  analizador léxico, derivados de `lexer.c`.
 
 ## Equipo
 
