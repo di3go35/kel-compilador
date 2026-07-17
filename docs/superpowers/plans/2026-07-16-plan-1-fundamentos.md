@@ -337,15 +337,8 @@ Usa estado global de archivo, igual que `diag.c` (`src/diag.c:7`), para ser cohe
  * esas las decide gcc. Los arreglos cuentan como una referencia de 8 bytes
  * porque KelType no guarda el número de elementos. */
 
-typedef struct {
-    char*    scope;       /* owned: "main", "main.for", "suma" */
-    char*    name;        /* owned */
-    KelType* type;        /* owned */
-    int      is_mutable;  /* 0 = val, 1 = var */
-    int      offset;      /* desplazamiento en el marco */
-    int      line;
-    char*    value;       /* owned; NULL si no es constante conocida */
-} SymEntry;
+/* SymEntry es privado de symtab.c: nadie fuera necesita leer entradas
+ * sueltas, solo imprimir la tabla y contarlas. */
 
 /* Copia todo lo que recibe: el llamante conserva la propiedad de sus datos.
  * `value` puede ser NULL. */
@@ -371,6 +364,16 @@ int kel_type_align(const KelType* t);
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    char*    scope;       /* owned: "main", "main.for", "suma" */
+    char*    name;        /* owned */
+    KelType* type;        /* owned */
+    int      is_mutable;  /* 0 = val, 1 = var */
+    int      offset;      /* desplazamiento en el marco */
+    int      line;
+    char*    value;       /* owned; NULL si no es constante conocida */
+} SymEntry;
+
 static SymEntry* g_log = NULL;
 static size_t    g_count = 0;
 static size_t    g_cap = 0;
@@ -395,19 +398,10 @@ int kel_type_align(const KelType* t) {
     return s > 0 ? s : 1;
 }
 
-static KelType* type_copy(const KelType* t) {
-    if (!t) return NULL;
-    KelType* n = (KelType*)calloc(1, sizeof(KelType));
-    n->kind = t->kind;
-    n->elem = type_copy(t->elem);
-    return n;
-}
-
-static void type_release(KelType* t) {
-    if (!t) return;
-    type_release(t->elem);
-    free(t);
-}
+/* El clone/free de KelType vive en parser.c (kel_type_clone/kel_type_free):
+ * parser.c posee KelType y ya exporta kel_type_name. semantic.c usa los
+ * mismos — dos copias privadas del mismo recorrido recursivo se quedarían
+ * obsoletas juntas y en silencio. */
 
 void kel_symlog_add(const char* scope, const char* name, const KelType* type,
                     int is_mutable, int offset, int line, const char* value) {
@@ -418,7 +412,7 @@ void kel_symlog_add(const char* scope, const char* name, const KelType* type,
     SymEntry* e = &g_log[g_count++];
     e->scope      = strdup(scope ? scope : "");
     e->name       = strdup(name ? name : "");
-    e->type       = type_copy(type);
+    e->type       = kel_type_clone(type);
     e->is_mutable = is_mutable;
     e->offset     = offset;
     e->line       = line;
@@ -454,7 +448,7 @@ void kel_symlog_free(void) {
     for (size_t i = 0; i < g_count; i++) {
         free(g_log[i].scope);
         free(g_log[i].name);
-        type_release(g_log[i].type);
+        kel_type_free(g_log[i].type);
         free(g_log[i].value);
     }
     free(g_log);
@@ -462,6 +456,49 @@ void kel_symlog_free(void) {
     g_count = g_cap = 0;
 }
 ```
+
+- [ ] **Step 2b: Unificar el clone/free de `KelType` en `parser.c`**
+
+`semantic.c` ya tenía `type_clone`/`type_free` privados haciendo el mismo
+recorrido recursivo sobre `KelType.elem`. `symtab.c` no puede llamar a los
+statics de `semantic.c`, y no debería: la dependencia va semantic → symtab, no
+al revés. El hogar natural es `parser.c`, que posee `KelType` y ya exporta
+`kel_type_name`.
+
+En `src/parser.h`, junto a `kel_type_name` (bajo `/* util para otras fases */`):
+
+```c
+KelType* kel_type_clone(const KelType* t);
+void     kel_type_free(KelType* t);
+```
+
+En `src/parser.c`, junto a `kel_type_name`:
+
+```c
+KelType* kel_type_clone(const KelType* t) {
+    if (!t) return NULL;
+    KelType* n = (KelType*)calloc(1, sizeof(KelType));
+    n->kind = t->kind;
+    n->elem = kel_type_clone(t->elem);
+    return n;
+}
+
+void kel_type_free(KelType* t) {
+    if (!t) return;
+    kel_type_free(t->elem);
+    free(t);
+}
+```
+
+En `src/semantic.c`, borrar los statics `type_clone`/`type_free` y reemplazar
+todos sus sitios de llamada por `kel_type_clone`/`kel_type_free`.
+Encuéntralos con `grep -n "type_clone\|type_free" src/semantic.c` — son varios.
+
+**Esta es la parte con más riesgo del task**: si rompes la propiedad de los
+tipos, hay doble free o fugas. La suite de 9 tests es la red de seguridad.
+Antes de borrar los statics, comprueba que son idénticos a las versiones
+nuevas; si difieren en algo, esa diferencia importa y hay que entenderla, no
+taparla.
 
 - [ ] **Step 3: Añadir `symtab.c` al Makefile**
 
