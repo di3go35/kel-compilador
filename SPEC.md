@@ -136,6 +136,9 @@ nums[0]                       // acceso por índice (base 0)
 ```
 
 - Tamaño fijo en v1 (no hay push/pop)
+- **Se pasan por referencia** a las funciones: si una función muta un
+  elemento del arreglo que recibe, el cambio es visible para quien la llamó.
+  Es coherente con C, que es el target de la Etapa 6.
 - Literal vacío (`[]`) válido solo cuando hay tipo esperado del contexto:
   `val v: [int] = []`
 
@@ -350,6 +353,7 @@ que luego compila con gcc. Alternativa: bytecode de una VM simple.
 | Variables             | `val`/`var`, tipo postfijo opcional | Estética Kotlin/Rust      |
 | Funciones             | `fn nombre(p: tipo) -> tipo`      | Estética Rust               |
 | Tipos incluidos       | int, float, bool, string, arrays  | Completo pero manejable     |
+| Paso de arreglos      | Por referencia                    | Coherente con el target C   |
 | Condicionales         | Sin paréntesis                    | Estética Go/Rust            |
 | Bucles                | `while` + `for i in 0..n`         | Cubre casos comunes         |
 | Salida                | `println(...)`                    | Simple, estilo Kotlin       |
