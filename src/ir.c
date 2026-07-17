@@ -529,9 +529,10 @@ static void print_addr(const Addr* a) {
     }
 }
 
-/* Aquí el `default` sí hace falta: todavía hay opcodes sin formato. Es un
- * andamio visible — si un opcode se genera pero no se imprime, sale
- * "<opcode N sin imprimir>" en el golden y el test falla. */
+/* Sin `default`, igual que print_addr: cerrada la Etapa 4 los 15 IROp tienen
+ * formato, así que el andamio sobra y -Wswitch pasa a exigir que cualquier
+ * opcode nuevo se imprima. Un `default` aquí solo serviría para que ese opcode
+ * nuevo saliera en silencio como texto de relleno en vez de romper el build. */
 static void print_instr(const Instr* in) {
     switch (in->op) {
         case IR_LABEL:
@@ -648,9 +649,6 @@ static void print_instr(const Instr* in) {
             printf("  ");
             print_addr(&in->dst);
             printf(" = read %s\n", kel_type_name(in->dst.type));
-            break;
-        default:
-            printf("  <opcode %d sin imprimir>\n", (int)in->op);
             break;
     }
 }
