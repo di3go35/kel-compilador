@@ -269,6 +269,21 @@ lenguaje (`println`, `read_line`).
 Cierra el hueco de "Entrada y salida" del criterio 1 y permite reproducir el
 ejemplo `LEER A` del profesor: `val a = read_int()`.
 
+**Riesgo para el Plan 2:** `kel_builtins[]` (`semantic.c`, cerca de la línea
+268) es una tabla `static` local a `semantic.c` — nada fuera de ese archivo
+puede preguntar "¿este nombre es un builtin?". `ir.c` necesita exactamente
+esa pregunta para decidir si un `N_CALL` a `read_int`/`read_float`/
+`read_line` se traduce a `IR_READ` en vez de a `IR_CALL` normal. Si `ir.c`
+simplemente repite las tres cadenas literales (`"read_int"`, `"read_float"`,
+`"read_line"`) para reconocerlas, es la misma duplicación de nombres que
+este proyecto ya tuvo que limpiar una vez — dos listas que se pueden
+desincronizar si algún día se agrega un cuarto builtin. La implementación
+del Plan 2 debe exponer una consulta desde `semantic.h` (por ejemplo,
+`int kel_is_builtin(const char* name)`) que `ir.c` pueda llamar, en vez de
+hardcodear los tres nombres de nuevo. No se agrega esa API todavía —nada la
+consume hasta que `ir.c` exista— pero debe entrar como parte del trabajo de
+la Etapa 4, no como deuda a mitad de esa implementación.
+
 ### 5.2 — Tabla de símbolos visible (`--symbols`)
 
 **Problema:** `scope_pop` (`semantic.c:87`) libera los símbolos al cerrar el

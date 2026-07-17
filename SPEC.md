@@ -334,8 +334,56 @@ Makefile
 ./kelc --tokens programa.kel # debug léxico
 ./kelc --ast programa.kel    # debug sintáctico/semántico
 ./kelc --sem programa.kel    # solo fase semántica
+./kelc --symbols programa.kel # tabla de símbolos
 ./kelc --help                # ayuda
 ```
+
+#### Salida de `--symbols`
+
+`--symbols` vuelca el log de declaraciones registrado durante la fase
+semántica: una fila por cada `val`/`var` declarado, en el orden en que
+el análisis las va viendo. Ejemplo, sobre `tests/symbols/basico.kel`:
+
+```
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+suma             a              int       var       0      1  —
+suma             b              int       var       4      1  —
+main             nombre         string    val       0      6  "Diego"
+main             puntaje        int       var       8      7  0
+main             pi             float     val      16      8  3.1415
+```
+
+Columnas:
+
+- **Ámbito**: ruta de scopes separada por `.`, p. ej. `main.for`. No son
+  niveles de anidamiento numerados — son los nombres de las construcciones
+  que abren scope (`main`, `for`, etc.), concatenados según se entra en
+  ellas.
+- **Identificador**: el nombre declarado.
+- **Tipo**: `int` / `float` / `bool` / `string` / `[T]`.
+- **Mut**: `val` o `var`.
+- **Despl**: desplazamiento dentro del marco de la función. **Es un
+  modelo del marco de pila, no una dirección real.** Se calcula sumando
+  el tamaño del tipo de cada variable (`int`=4, `float`=8, `bool`=1,
+  `string`=8 como puntero, arreglos=8 como referencia), alineando cada
+  desplazamiento al tamaño de su propio tipo, y reiniciando el contador
+  en cada función. La dirección real de cada variable la decide gcc al
+  compilar el C generado en la Etapa 6 — este número es solo la
+  contabilidad que el compilador de Kel lleva internamente, útil para
+  razonar sobre el layout pero no para leer memoria.
+- **Un arreglo cuenta como una referencia de 8 bytes, no como
+  n × tamaño del elemento**: `KelType` no guarda cuántos elementos tiene
+  un arreglo, así que no hay forma de saber ese tamaño en tiempo de
+  compilación. Para los parámetros esto es exacto (los arreglos se pasan
+  por referencia); para variables locales es una simplificación
+  declarada, no un intento de modelar el tamaño real del buffer.
+- **Línea**: línea fuente de la declaración.
+- **Valor**: el texto del literal, si el inicializador es una constante
+  reconocible en tiempo de compilación (`5`, `-5`, `3.5`, `true`,
+  `"texto"`); `—` en cualquier otro caso (inicializador con una
+  expresión, llamada a función, etc.). La tabla de símbolos no ejecuta
+  nada, así que no puede conocer valores que solo existen en tiempo de
+  ejecución.
 
 ---
 

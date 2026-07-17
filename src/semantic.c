@@ -182,6 +182,29 @@ static char* const_text(const Node* init) {
             }
             break;
         }
+        /* Kel parsea "-5" como MINUS + INT_LIT(5), no como un token literal
+         * negativo (decisión de diseño documentada: evita la ambigüedad
+         * entre "a-5" y "a -5"). Por eso una constante negativa llega aquí
+         * como N_UNOP('-') envolviendo un N_INT_LIT/N_FLOAT_LIT en vez de
+         * ser ella misma un nodo *_LIT, y hay que reconocer ese patrón
+         * explícitamente o la columna Valor queda vacía en el caso más
+         * común que alguien va a teclear en la demo. Solo se maneja '-'
+         * sobre un literal numérico directo: '!' sobre bool no se toca
+         * (mantenerlo mínimo), y si el operando no es un *_LIT (p.ej. una
+         * doble negación anidada, que no es Kel válido pero no debe hacer
+         * crashear al compilador) cae al return NULL de abajo. */
+        case N_UNOP:
+            if (strcmp(init->op, "-") == 0 && init->lhs) {
+                if (init->lhs->kind == N_INT_LIT) {
+                    snprintf(buf, sizeof(buf), "-%lld", init->lhs->int_val);
+                    break;
+                }
+                if (init->lhs->kind == N_FLOAT_LIT) {
+                    snprintf(buf, sizeof(buf), "-%.15g", init->lhs->float_val);
+                    break;
+                }
+            }
+            return NULL;
         default: return NULL;
     }
     return strdup(buf);
