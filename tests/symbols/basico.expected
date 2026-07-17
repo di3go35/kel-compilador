@@ -1,6 +1,6 @@
-Ámbito       Identificador  Tipo      Mut   Despl  Línea  Valor
-suma         a              int       var       0      1  —
-suma         b              int       var       4      1  —
-main         nombre         string    val       0      6  "Diego"
-main         puntaje        int       var       8      7  0
-main         pi             float     val      16      8  3.1415
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+suma             a              int       var       0      1  —
+suma             b              int       var       4      1  —
+main             nombre         string    val       0      6  "Diego"
+main             puntaje        int       var       8      7  0
+main             pi             float     val      16      8  3.1415

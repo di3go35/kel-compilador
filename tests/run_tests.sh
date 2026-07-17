@@ -68,7 +68,8 @@ for f in tests/symbols/*.kel; do
         fail=$((fail+1))
         fails+=("$f (--symbols no coincide con $exp)")
         printf "  FAIL %s (--symbols no coincide)\n" "$f"
-        printf "    --- esperado ---\n%s\n    --- obtenido ---\n%s\n" "$(cat "$exp")" "$got"
+        printf "    --- esperado ---\n%s\n    --- obtenido ---\n%s\n" \
+            "$(cat "$exp" | tr -d '\r')" "$got"
     fi
 done
 

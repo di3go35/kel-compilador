@@ -77,20 +77,49 @@ static void scope_push(Sem* S, const char* label) {
 }
 
 /* Construye el ámbito punteado ("main.for") caminando hasta la raíz y
- * saltando los bloques anónimos. Escribe en `out` y lo devuelve. */
+ * saltando los bloques anónimos. Escribe en `out` y lo devuelve.
+ *
+ * Hay dos topes y truncan en direcciones OPUESTAS:
+ *   - `parts` se llena desde dentro hacia fuera, así que al desbordarse
+ *     pierde los ámbitos EXTERIORES (se iría el prefijo "main.").
+ *   - `out` se escribe de fuera hacia dentro, así que al agotarse pierde
+ *     los ámbitos INTERIORES.
+ * Los dos casos marcan la truncación con '…': una ruta incompleta que no
+ * se distingue de una completa es peor que no imprimir nada, y esta es
+ * justo la tabla que se supone que hay que creerse. Hacen falta 32
+ * ámbitos con nombre anidados para llegar a esto. */
 static const char* scope_path(Sem* S, char* out, size_t cap) {
-    const char* parts[16];
+    const char* parts[32];
+    const int max_parts = (int)(sizeof(parts) / sizeof(parts[0]));
     int n = 0;
-    for (Scope* s = S->scope; s && n < 16; s = s->parent)
-        if (s->label) parts[n++] = s->label;
+    int cut_outer = 0, cut_inner = 0;
+
+    for (Scope* s = S->scope; s; s = s->parent) {
+        if (!s->label) continue;
+        if (n == max_parts) { cut_outer = 1; break; }
+        parts[n++] = s->label;
+    }
+
     out[0] = '\0';
     size_t len = 0;
+    if (cut_outer && cap > 3) { strcpy(out, "…"); len = 3; }  /* '…' = 3 bytes */
+
     for (int i = n - 1; i >= 0; i--) {
         size_t need = strlen(parts[i]) + (len ? 1 : 0);
-        if (len + need + 1 > cap) break;
+        if (len + need + 1 > cap) { cut_inner = 1; break; }
         if (len) out[len++] = '.';
         strcpy(out + len, parts[i]);
         len += strlen(parts[i]);
+    }
+
+    if (cut_inner) {
+        const char* mark = ".…";              /* 1 + 3 bytes */
+        size_t mlen = strlen(mark);
+        if (len + mlen + 1 <= cap) {          /* cabe al final */
+            strcpy(out + len, mark);
+        } else if (cap > mlen) {              /* no cabe: pisar la cola */
+            strcpy(out + (cap - mlen - 1), mark);
+        }
     }
     return out;
 }
@@ -130,9 +159,29 @@ static char* const_text(const Node* init) {
     char buf[128];
     switch (init->kind) {
         case N_INT_LIT:   snprintf(buf, sizeof(buf), "%lld", init->int_val); break;
-        case N_FLOAT_LIT: snprintf(buf, sizeof(buf), "%g", init->float_val); break;
+        /* %.15g y no %g: %g da 6 dígitos significativos, así que
+         * 3.14159265358979 saldría como 3.14159 y parecería que el
+         * compilador leyó mal el literal. %.15g va y vuelve sin
+         * artefactos donde %.17g daría 3.1415000000000002. */
+        case N_FLOAT_LIT: snprintf(buf, sizeof(buf), "%.15g", init->float_val); break;
         case N_BOOL_LIT:  snprintf(buf, sizeof(buf), "%s", init->bool_val ? "true" : "false"); break;
-        case N_STR_LIT:   snprintf(buf, sizeof(buf), "\"%s\"", init->str_val); break;
+        case N_STR_LIT: {
+            /* Truncar con snprintf a secas se comería la comilla de cierre
+             * y la cadena parecería sin terminar. Cortamos explícitamente y
+             * marcamos con '…' dentro de las comillas. */
+            const char* s = init->str_val ? init->str_val : "";
+            const size_t max_bytes = 100;   /* cabe en buf con margen */
+            if (strlen(s) <= max_bytes) {
+                snprintf(buf, sizeof(buf), "\"%s\"", s);
+            } else {
+                /* No partir un carácter UTF-8: retroceder mientras el byte
+                 * de corte sea una continuación (10xxxxxx). */
+                size_t cut = max_bytes;
+                while (cut > 0 && ((unsigned char)s[cut] & 0xC0) == 0x80) cut--;
+                snprintf(buf, sizeof(buf), "\"%.*s…\"", (int)cut, s);
+            }
+            break;
+        }
         default: return NULL;
     }
     return strdup(buf);

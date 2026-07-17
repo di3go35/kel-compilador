@@ -58,22 +58,25 @@ void kel_symlog_add(const char* scope, const char* name, const KelType* type,
 
 size_t kel_symlog_count(void) { return g_count; }
 
-/* La cabecera va escrita a mano, no con %-12s.
+/* La cabecera va escrita a mano, no con %-16s.
  *
  * printf rellena contando BYTES, no caracteres. "Ámbito" ocupa 7 bytes en
  * UTF-8 pero 6 columnas visuales (Á son 2 bytes), y "Línea" lo mismo. Con
- * %-12s la cabecera saldría desplazada una columna respecto a los datos.
+ * %-16s la cabecera saldría desplazada una columna respecto a los datos.
  * Las filas de datos sí usan %-Ns sin problema: los identificadores, los
  * tipos y los ámbitos son todos ASCII. El "—" de la columna Valor es UTF-8
- * pero es la última columna y no se rellena. */
+ * pero es la última columna y no se rellena.
+ *
+ * Ámbito son 16 columnas porque "main.for.for.for" —tres bucles anidados,
+ * un programa normal— ya son 16 caracteres. */
 static const char* SYM_HEADER =
-    "Ámbito       Identificador  Tipo      Mut   Despl  Línea  Valor";
+    "Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor";
 
 void kel_symlog_print(void) {
     puts(SYM_HEADER);
     for (size_t i = 0; i < g_count; i++) {
         SymEntry* e = &g_log[i];
-        printf("%-12s %-14s %-9s %-4s %6d %6d  %s\n",
+        printf("%-16s %-14s %-9s %-4s %6d %6d  %s\n",
                e->scope, e->name, kel_type_name(e->type),
                e->is_mutable ? "var" : "val",
                e->offset, e->line,
