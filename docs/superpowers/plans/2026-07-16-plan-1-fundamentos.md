@@ -176,8 +176,13 @@ Este task es solo el header — no hay implementación todavía, así que no hay
 En `src/ir.h`, en el `enum IROp`, añadir tras `IR_UNOP`:
 
 ```c
-    IR_ARRAY_NEW,         /* dst = array[op1]  (op1 = nº de elementos, const int) */
+    IR_ARRAY_NEW,         /* dst = alloc <tipo>[op1]  (op1 = nº elementos, const int) */
 ```
+
+**Por qué `alloc` y no `array`:** `IR_INDEX_LOAD` imprime `t4 = arr[i]`, y `array` no
+es palabra reservada en Kel, así que `val array = [1,2,3]` es legal. Imprimir
+`t6 = array[3]` se leería como una indexación sobre esa variable. El `--ir` es lo
+que se demuestra en vivo en la exposición, así que la ambigüedad tiene coste real.
 
 y tras `IR_PRINTLN`:
 
@@ -192,7 +197,7 @@ Cuidado con la coma: `IR_PRINTLN` pasa a llevar coma al final.
 En el bloque de comentario de `ir.h`, en la lista de formatos de impresión, añadir tras la línea de `IR_INDEX_STORE`:
 
 ```c
- *     t6 = array[3]           ; IR_ARRAY_NEW  (reserva, no inicializa)
+ *     t6 = alloc int[3]       ; IR_ARRAY_NEW  (reserva, no inicializa)
 ```
 
 y tras la línea de `IR_PRINTLN`:
@@ -224,8 +229,8 @@ typedef struct {
     KelType* ret_type;      /* no-owned; apunta al AST */
     Instr*   body;          /* owned */
     size_t   count, capacity;
-    int      n_temps;       /* temporales usados: t1..t_temps */
-    int      n_labels;      /* etiquetas usadas: L1..L_labels */
+    size_t   n_temps;       /* temporales usados: t1..t_temps */
+    size_t   n_labels;      /* etiquetas usadas: L1..L_labels */
 } IRFunction;
 
 typedef struct {
@@ -260,8 +265,19 @@ por:
  *
  * API de la Etapa 5 (optimize.c) — Plan 4.
  * API de la Etapa 6 (emit_c.c)   — Plan 3.
+ *
+ * CUIDADO — tiempo de vida: IRFunction.params y ret_type apuntan al AST sin
+ * poseerlo, así que el AST debe seguir vivo mientras se use el IRProgram.
+ * main.c libera el AST con kel_free_ast() justo tras el semántico; al conectar
+ * kel_gen habrá que mover esa llamada detrás de la generación de IR y de la
+ * emisión de C, o emit_c.c leerá memoria liberada.
  */
 ```
+
+**La nota de tiempo de vida no es decorativa.** [main.c:87](../../../src/main.c) hace
+`kel_free_ast(pr.root)` justo tras el semántico. En cuanto el Plan 2 conecte
+`kel_gen`, esa llamada tiene que moverse detrás de la emisión de C o `params` y
+`ret_type` quedan colgando. Es un use-after-free esperando a que alguien lo pise.
 
 - [ ] **Step 5: Verificar que el header compila por sí solo**
 

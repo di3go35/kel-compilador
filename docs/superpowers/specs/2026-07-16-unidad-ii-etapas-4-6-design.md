@@ -130,6 +130,13 @@ typedef struct {
 
 El optimizador trabaja por función de forma natural con esta estructura.
 
+**Tiempo de vida: el AST debe sobrevivir al `IRProgram`.** `params` y `ret_type`
+apuntan al AST sin poseerlo. Hoy `main.c` llama a `kel_free_ast()` justo tras el
+análisis semántico; al conectar `kel_gen` esa llamada debe moverse detrás de la
+generación de IR y de la emisión de C, o `emit_c.c` leerá memoria liberada. Está
+documentado en el propio `ir.h` para que quien implemente la Etapa 4 lo vea sin
+tener que leer este spec.
+
 **3.2 — Dos opcodes nuevos.**
 
 | Opcode | Forma | Motivo |
