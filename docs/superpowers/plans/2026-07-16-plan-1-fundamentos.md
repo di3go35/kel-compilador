@@ -605,12 +605,12 @@ fn main() {
 Crear `tests/symbols/basico.expected`:
 
 ```
-Ámbito       Identificador  Tipo      Mut   Despl  Línea  Valor
-suma         a              int       var       0      1  —
-suma         b              int       var       4      1  —
-main         nombre         string    val       0      6  "Diego"
-main         puntaje        int       var       8      7  0
-main         pi             float     val      16      8  3.1415
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+suma             a              int       var       0      1  —
+suma             b              int       var       4      1  —
+main             nombre         string    val       0      6  "Diego"
+main             puntaje        int       var       8      7  0
+main             pi             float     val      16      8  3.1415
 ```
 
 Notas sobre por qué es exactamente así:
@@ -620,7 +620,9 @@ Notas sobre por qué es exactamente así:
 - **Los desplazamientos se reinician por función**: `suma` empieza en 0 otra vez.
 - `nombre` es `string` (8 bytes) → `puntaje` va alineado a 4 pero el offset ya es 8 → 8. `pi` es `float` (align 8): tras `puntaje` el cursor está en 12, se alinea a 16.
 - **`Valor` solo se llena con literales directos.** `puntaje = suma(...)` es una asignación, no una declaración, así que no aparece.
-- **La cabecera está alineada a mano** y debe coincidir columna a columna con el `printf` de las filas (`"%-12s %-14s %-9s %-4s %6d %6d  %s\n"`). Si tocas el formato de las filas, la cabecera y todos los `.expected` se mueven. Ver el comentario de `SYM_HEADER` en `symtab.c` para el porqué.
+- **La cabecera está alineada a mano** y debe coincidir columna a columna con el `printf` de las filas (`"%-16s %-14s %-9s %-4s %6d %6d  %s\n"`). Si tocas el formato de las filas, la cabecera y todos los `.expected` se mueven. Ver el comentario de `SYM_HEADER` en `symtab.c` para el porqué.
+- **El Ámbito son 16 columnas, no 12.** `main.for.for.for` son 16 caracteres, y tres bucles anidados es un programa normal (una multiplicación de matrices). Con 12 la tabla se desalineaba en la demo.
+- **La salida de `kelc.exe` lleva CRLF**: MinGW abre stdout en modo texto y traduce `\n` a `\r\n`, incluso a través de una tubería. El runner normaliza con `tr -d '\r'` los dos lados de la comparación. No se puede arreglar poniendo CRLF en el `.expected`: `.gitattributes` declara `* text=auto eol=lf` y git lo revertiría a LF en silencio. Los golden tests del Plan 3 tendrán el mismo problema y la misma solución.
 
 - [ ] **Step 3: Añadir la sección de golden tests al runner**
 
@@ -960,10 +962,10 @@ fn main() {
 Crear `tests/symbols/anidado.expected`:
 
 ```
-Ámbito       Identificador  Tipo      Mut   Despl  Línea  Valor
-main         total          int       var       0      2  0
-main.for     i              int       val       4      3  —
-main.for     doble          int       val       8      4  —
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+main             total          int       var       0      2  0
+main.for         i              int       val       4      3  —
+main.for         doble          int       val       8      4  —
 ```
 
 Por qué:
