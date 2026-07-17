@@ -168,16 +168,37 @@ val s = read_line()      // lee una línea completa, incluidos espacios
   añadir un built-in no toca el autómata léxico ni la gramática.
 - Redefinirlas es un error: `fn read_int() -> int { ... }` no compila.
 
-#### ¿Por qué `println` sí es palabra clave y `read_*` no?
+#### ¿Por qué `println` sí es palabra reservada y `read_*` no?
 
-Porque son cosas gramaticalmente distintas. `println(x)` es una **sentencia**:
-no produce valor y no puede aparecer dentro de una expresión, así que necesita
-su propia regla en la gramática y su token (`TOKEN_PRINTLN`).
+La diferencia está en el **léxico, no en la gramática**. `println` tiene token
+propio (`TOKEN_PRINTLN`), pero no tiene regla propia: el parser lo acepta en la
+misma rama que a un identificador cualquiera y construye un `N_IDENT`, así que
+`println(x)` llega al semántico como un `N_CALL` normal — igual que
+`read_int()`.
 
-`read_int()` es una **expresión**: produce un valor y tiene que poder aparecer
-donde quepa cualquier otro (`val a = read_int()`, `read_int() + 1`). Eso es
-exactamente lo que ya hace una llamada a función, de modo que no necesita ni
-token ni regla nueva — basta con registrar su firma.
+Que `println(x)` no sirva dentro de una expresión no lo impone la gramática,
+sino el **sistema de tipos**: `check_call` le da tipo `void`. Por eso
+`val a: int = println(1)` falla con *"inicializador de 'a': esperado int,
+encontrado void"*, palabra por palabra el mismo error que da una función void
+del usuario:
+
+```kel
+fn f() {}
+val a: int = f()      // inicializador de 'a': esperado int, encontrado void
+```
+
+Gramaticalmente, `println` no recibe ningún trato especial.
+
+Lo único que compra `TOKEN_PRINTLN` es **reservar la palabra**: el lexer nunca
+la entrega como identificador, de modo que `var println: int = 5` no compila
+(*"se esperaba nombre de variable"*).
+
+Ese es el intercambio. Reservar cuesta un token y a cambio protege el nombre.
+No reservar deja el lexer intacto, pero el nombre queda libre: `var read_int:
+int = 5` **compila**. No llega a romper nada — las variables y las funciones
+viven en tablas distintas, así que `read_int()` sigue llamando al built-in
+mientras `read_int` a secas es la variable —, pero es código legal y confuso
+que el compilador no ataja.
 
 La consecuencia práctica: añadir un built-in de entrada no toca el lexer ni el
 parser, solo la tabla de funciones del análisis semántico.

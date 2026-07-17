@@ -265,10 +265,10 @@ Tres funciones: `read_int() -> int`, `read_float() -> float`,
 `read_line() -> string`. Snake_case por coherencia con el sabor Rust del
 lenguaje (`println`, `read_line`).
 
-**No son palabras reservadas.** `println` es una sentencia (`TOKEN_PRINTLN` →
-`N_PRINTLN`), pero `read_int()` devuelve un valor, así que es una expresión — y
-`read_int` seguido de `(` ya parsea hoy como `N_CALL`, porque es un
-`TOKEN_IDENT` normal. Por tanto:
+**No son palabras reservadas.** `println` sí tiene token (`TOKEN_PRINTLN`), pero
+el parser lo trata como un identificador: `println(x)` es un `N_CALL` corriente.
+`read_int` no tiene ni token, y `read_int` seguido de `(` ya parsea hoy como
+`N_CALL` porque es un `TOKEN_IDENT` normal. Por tanto:
 
 - **Lexer y parser: cero cambios.** No hay tokens nuevos.
 - `semantic.c`: registrar las tres firmas en la tabla de funciones e impedir su
