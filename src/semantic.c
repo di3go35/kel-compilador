@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <inttypes.h>
 
 /* ---------- Tabla de símbolos ---------- */
 
@@ -159,7 +160,7 @@ static char* const_text(const Node* init) {
     if (!init) return NULL;
     char buf[128];
     switch (init->kind) {
-        case N_INT_LIT:   snprintf(buf, sizeof(buf), "%lld", init->int_val); break;
+        case N_INT_LIT:   snprintf(buf, sizeof(buf), "%" PRId64, (int64_t)init->int_val); break;
         /* %.15g y no %g: %g da 6 dígitos significativos, así que
          * 3.14159265358979 saldría como 3.14159 y parecería que el
          * compilador leyó mal el literal. %.15g va y vuelve sin
@@ -197,7 +198,7 @@ static char* const_text(const Node* init) {
         case N_UNOP:
             if (strcmp(init->op, "-") == 0 && init->lhs) {
                 if (init->lhs->kind == N_INT_LIT) {
-                    snprintf(buf, sizeof(buf), "-%lld", init->lhs->int_val);
+                    snprintf(buf, sizeof(buf), "-%" PRId64, (int64_t)init->lhs->int_val);
                     break;
                 }
                 if (init->lhs->kind == N_FLOAT_LIT) {
