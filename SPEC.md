@@ -385,6 +385,7 @@ Makefile
 ./kelc --symbols programa.kel # tabla de símbolos
 ./kelc --ir programa.kel     # código intermedio (Etapa 4)
 ./kelc --opt programa.kel    # TAC optimizado (Etapa 5)
+./kelc --stats programa.kel  # métricas + reducción del optimizador
 ./kelc --emit-c programa.kel > programa.c   # imprime el C generado (Etapa 6)
 ./kelc programa.kel -o programa             # ejecutable vía gcc (Etapa 6)
 ./kelc --help                # ayuda
