@@ -66,6 +66,15 @@ static Addr addr_const_str(const char* s, KelType* t) {
 
 /* ---------- Emisión ---------- */
 
+/* `in` se pasa por valor a propósito: se copia desde la pila DESPUÉS del
+ * realloc, así que nunca se lee del buffer viejo.
+ *
+ * AVISO para quien haga backpatching (el if/while del Task 8): esto realloca,
+ * así que cualquier `Instr*` a f->body queda colgando en cuanto emitas otra
+ * instrucción. Guarda el ÍNDICE, nunca el puntero:
+ *     size_t j = f->count; emit(f, jmp); ... ; f->body[j].op2 = addr_label(L);
+ * Con el puntero compila igual y falla solo cuando el cuerpo cruza la
+ * capacidad — es decir, en los programas grandes y no en tus tests. */
 static void emit(IRFunction* f, Instr in) {
     if (f->count == f->capacity) {
         f->capacity = f->capacity ? f->capacity * 2 : 16;
