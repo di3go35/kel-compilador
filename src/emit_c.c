@@ -249,6 +249,25 @@ static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
             }
             fprintf(out, "\n");
             break;
+        case IR_LABEL:
+            /* Siempre con `;`: una etiqueta ante `}` viola C < C23 y todo
+             * while en última posición lo produce (§5.4.2). El ; es gratis. */
+            fprintf(out, "L%lld: ;\n", in->dst.i);
+            break;
+        case IR_GOTO:
+            fprintf(out, "    goto ");
+            c_addr(out, &in->op1); fprintf(out, ";\n");
+            break;
+        case IR_IF_GOTO:
+            fprintf(out, "    if (");
+            c_addr(out, &in->op1); fprintf(out, ") goto ");
+            c_addr(out, &in->op2); fprintf(out, ";\n");
+            break;
+        case IR_IF_FALSE_GOTO:
+            fprintf(out, "    if (!(");
+            c_addr(out, &in->op1); fprintf(out, ")) goto ");
+            c_addr(out, &in->op2); fprintf(out, ";\n");
+            break;
         default:
             /* Andamio: si esto llega al .c, gcc no compila y el e2e falla
              * con el mensaje a la vista. Cada task siguiente quita casos. */

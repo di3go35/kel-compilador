@@ -1,0 +1,22 @@
+fn main() {
+  var t = 0
+  if t > 0 {
+    println("positivo")
+  } else {
+    println("no positivo")
+  }
+  while t < 3 {
+    t = t + 1
+  }
+  println(t)
+  var suma = 0
+  for i in 0..5 {
+    suma = suma + i
+  }
+  println(suma)
+  val p = true
+  val q = false
+  if p || q {
+    println("corto")
+  }
+}
