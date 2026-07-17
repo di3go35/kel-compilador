@@ -59,12 +59,14 @@ typedef enum {
     ADDR_CONST_STR,
     ADDR_VAR,        /* variable del programa, por nombre */
     ADDR_TEMP,       /* temporal t1, t2... */
-    ADDR_LABEL       /* L1, L2, ...  (solo como target de saltos) */
+    ADDR_LABEL       /* L1, L2, ...  En op2 de un salto es el destino; en dst
+                      * de un IR_LABEL es la definición de la etiqueta. */
 } AddrKind;
 
 typedef struct {
     AddrKind kind;
-    KelType* type;        /* no-owned; apunta a inferred_type del AST */
+    KelType* type;        /* no-owned; apunta a inferred_type del AST.
+                           * PUEDE SER NULL — ver "Tipos" en las Convenciones. */
     long long    i;       /* ADDR_CONST_INT, ADDR_TEMP id, ADDR_LABEL id */
     double       f;       /* ADDR_CONST_FLOAT */
     int          b;       /* ADDR_CONST_BOOL */
@@ -78,7 +80,14 @@ typedef enum {
     IR_UNOP,              /* dst = <op> op1 */
     IR_ARRAY_NEW,         /* dst = alloc <tipo>[op1]  (op1 = nº elementos, const int) */
     IR_INDEX_LOAD,        /* dst = op1[op2] */
-    IR_INDEX_STORE,       /* op1[op2] = dst  (dst es la fuente) */
+    /* op1[op2] = dst. OJO: aquí `dst` es la FUENTE, no el destino. Un store
+     * tiene tres entradas y ninguna salida, así que se reaprovecha el hueco de
+     * dst en vez de añadir un cuarto operando.
+     * AVISO PARA LA ETAPA 5: es la única instrucción donde dst se lee en vez de
+     * escribirse. Un análisis def-use que asuma "dst siempre define" creerá que
+     * esto define el arreglo temporal, y puede borrar el store por muerto o
+     * matar la definición real. */
+    IR_INDEX_STORE,
     IR_PARAM,             /* push arg op1 */
     IR_CALL,              /* dst = call <sym>, op2.i args  (dst ADDR_NONE si void) */
     IR_GOTO,              /* goto op1 (label) */
@@ -92,7 +101,13 @@ typedef enum {
 typedef struct {
     IROp op;
     Addr dst, op1, op2;
-    const char* sym;      /* "+", "-", ... para BINOP/UNOP; o nombre de fn */
+    /* "+", "-", ... para BINOP/UNOP; o nombre de fn para IR_CALL.
+     * no-owned, y de procedencia mixta: casi siempre apunta a cadenas del AST
+     * (Node.op, Node.str_val, que el AST sí posee y libera), pero a veces a un
+     * literal estático — el "<" que ir.c fabrica al desazucarar el `for` no
+     * viene de ningún nodo. Nunca se libera: ni free() sobre un literal, ni
+     * doble free sobre lo que el AST ya libera. */
+    const char* sym;
 } Instr;
 
 /* Una función compilada. Los temporales (t1..t_temps) y las etiquetas

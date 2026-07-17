@@ -274,10 +274,14 @@ por:
  */
 ```
 
-**La nota de tiempo de vida no es decorativa.** [main.c:87](../../../src/main.c) hace
-`kel_free_ast(pr.root)` justo tras el semántico. En cuanto el Plan 2 conecte
-`kel_gen`, esa llamada tiene que moverse detrás de la emisión de C o `params` y
-`ret_type` quedan colgando. Es un use-after-free esperando a que alguien lo pise.
+**La nota de tiempo de vida no es decorativa.** [main.c](../../../src/main.c) hace
+`kel_free_ast(pr.root)` al cerrar el bloque de compilación, justo tras el
+semántico. En cuanto el Plan 2 conecte `kel_gen`, esa llamada tiene que moverse
+detrás de la emisión o `params` y `ret_type` quedan colgando. Es un
+use-after-free esperando a que alguien lo pise.
+
+*(Esta nota decía `main.c:87`; el free estaba en la 91. El número se pudrió
+antes de que el Plan 2 llegara a usarlo — de ahí que ahora no lleve ninguno.)*
 
 - [ ] **Step 5: Verificar que el header compila por sí solo**
 
