@@ -74,6 +74,31 @@ for f in tests/symbols/*.kel; do
 done
 
 echo
+echo "== tests/ir (salida de --ir) =="
+for f in tests/ir/*.kel; do
+    [ -e "$f" ] || continue
+    exp="${f%.kel}.expected"
+    if [ ! -e "$exp" ]; then
+        fail=$((fail+1))
+        fails+=("$f (falta $exp)")
+        printf "  FAIL %s (falta %s)\n" "$f" "$exp"
+        continue
+    fi
+    # tr -d '\r' en los dos lados: ver la nota de tests/symbols.
+    got=$("$KELC" --ir "$f" 2>/dev/null | tr -d '\r')
+    if [ "$got" = "$(cat "$exp" | tr -d '\r')" ]; then
+        pass=$((pass+1))
+        printf "  ok   %s\n" "$f"
+    else
+        fail=$((fail+1))
+        fails+=("$f (--ir no coincide con $exp)")
+        printf "  FAIL %s (--ir no coincide)\n" "$f"
+        printf "    --- esperado ---\n%s\n    --- obtenido ---\n%s\n" \
+            "$(cat "$exp" | tr -d '\r')" "$got"
+    fi
+done
+
+echo
 echo "Resultado: $pass pasaron, $fail fallaron."
 if [ "$fail" -ne 0 ]; then
     echo "Fallos:"

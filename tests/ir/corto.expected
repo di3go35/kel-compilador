@@ -1,0 +1,14 @@
+fn main() {
+  p = true
+  q = false
+  t1 = p
+  ifFalse t1 goto L1
+  t1 = q
+L1:
+  a = t1
+  t2 = p
+  if t2 goto L2
+  t2 = q
+L2:
+  b = t2
+}

@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -Wpedantic -std=c11 -g
-SRC = src/main.c src/lexer.c src/parser.c src/semantic.c src/diag.c src/symtab.c
+SRC = src/main.c src/lexer.c src/parser.c src/semantic.c src/diag.c src/symtab.c src/ir.c
 OUT = kelc
 
 # Build con AddressSanitizer + LeakSanitizer (sug. 10).

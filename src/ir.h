@@ -13,7 +13,7 @@
  * Los operandos son "Addr": variables, temporales (t1, t2, ...),
  * constantes o etiquetas.
  *
- * Formato de impresión por instrucción (flag `--ir` futuro):
+ * Formato de impresión por instrucción (flag `--ir`):
  *
  *     t1 = a + b              ; IR_BINOP
  *     t2 = -t1                ; IR_UNOP
@@ -32,11 +32,32 @@
  *     t7 = read int           ; IR_READ
  *
  * Convenciones:
- *   - Cada función empieza con un IR_LABEL con el nombre de la función.
+ *   - IRFunction lleva nombre, params y ret_type: no hace falta un IR_LABEL
+ *     con el nombre de la función. --ir imprime la cabecera desde la struct.
+ *   - IR_LABEL solo lleva etiquetas numéricas L1, L2..., en dst (ADDR_LABEL).
  *   - Temporales son t1, t2, ... numerados por función.
  *   - Etiquetas: L1, L2, ... únicas por función.
- *   - Tipos: cada Addr lleva un KelType para facilitar la Etapa 6
- *     (emitir C requiere saber si un `+` es aritmético o concatenación).
+ *   - Los números son IDENTIDAD, no orden de aparición. En un cortocircuito
+ *     anidado el temporal de fuera se reserva antes que el de dentro pero se
+ *     escribe después, así que `(a || b) && c` imprime t4 antes que t3:
+ *
+ *         t4 = a          ; el || de dentro
+ *         if t4 goto L3
+ *         t4 = b
+ *       L3:
+ *         t3 = t4         ; el && de fuera, reservado primero
+ *
+ *     No es un bug: es lo que pasa al reservar el temporal del resultado antes
+ *     de generar el lado izquierdo. La Etapa 5 debe tratarlos como ids únicos,
+ *     nunca asumir que t_n se define antes que t_n+1.
+ *   - Tipos: un Addr que representa un *valor* lleva su KelType, porque la
+ *     Etapa 6 lo necesita (emitir C requiere saber si un `+` es aritmético o
+ *     concatenación). Pero `type` NO siempre está: es NULL en ADDR_NONE, en
+ *     ADDR_LABEL, y en las constantes que son pura maquinaria de la
+ *     instrucción y cuyo tipo ya implica el opcode — el nº de argumentos de
+ *     IR_CALL, el tamaño de IR_ARRAY_NEW, el índice literal de un
+ *     IR_INDEX_STORE. **La Etapa 6 debe comprobar NULL antes de mirar
+ *     `Addr.type`.** Ver también el hueco conocido del `for` más abajo.
  *
  * Esta fase aprovecha `Node.inferred_type` anotado en semántico.
  * ============================================================ */
@@ -44,18 +65,21 @@
 #include "parser.h"
 
 typedef enum {
+    ADDR_NONE = 0,   /* operando ausente. Un Addr en cero es ADDR_NONE. */
     ADDR_CONST_INT,
     ADDR_CONST_FLOAT,
     ADDR_CONST_BOOL,
     ADDR_CONST_STR,
     ADDR_VAR,        /* variable del programa, por nombre */
     ADDR_TEMP,       /* temporal t1, t2... */
-    ADDR_LABEL       /* L1, L2, ...  (solo como target de saltos) */
+    ADDR_LABEL       /* L1, L2, ...  En op2 de un salto es el destino; en dst
+                      * de un IR_LABEL es la definición de la etiqueta. */
 } AddrKind;
 
 typedef struct {
     AddrKind kind;
-    KelType* type;        /* no-owned; apunta a inferred_type del AST */
+    KelType* type;        /* no-owned; apunta a inferred_type del AST.
+                           * PUEDE SER NULL — ver "Tipos" en las Convenciones. */
     long long    i;       /* ADDR_CONST_INT, ADDR_TEMP id, ADDR_LABEL id */
     double       f;       /* ADDR_CONST_FLOAT */
     int          b;       /* ADDR_CONST_BOOL */
@@ -69,13 +93,20 @@ typedef enum {
     IR_UNOP,              /* dst = <op> op1 */
     IR_ARRAY_NEW,         /* dst = alloc <tipo>[op1]  (op1 = nº elementos, const int) */
     IR_INDEX_LOAD,        /* dst = op1[op2] */
-    IR_INDEX_STORE,       /* op1[op2] = dst  (dst es la fuente) */
+    /* op1[op2] = dst. OJO: aquí `dst` es la FUENTE, no el destino. Un store
+     * tiene tres entradas y ninguna salida, así que se reaprovecha el hueco de
+     * dst en vez de añadir un cuarto operando.
+     * AVISO PARA LA ETAPA 5: es la única instrucción donde dst se lee en vez de
+     * escribirse. Un análisis def-use que asuma "dst siempre define" creerá que
+     * esto define el arreglo temporal, y puede borrar el store por muerto o
+     * matar la definición real. */
+    IR_INDEX_STORE,
     IR_PARAM,             /* push arg op1 */
-    IR_CALL,              /* dst = call <op1.s>, n_params (usar 'i' en op2) */
+    IR_CALL,              /* dst = call <sym>, op2.i args  (dst ADDR_NONE si void) */
     IR_GOTO,              /* goto op1 (label) */
     IR_IF_GOTO,           /* if op1 goto op2 */
     IR_IF_FALSE_GOTO,     /* ifFalse op1 goto op2 */
-    IR_RETURN,            /* return op1 (o void si op1.kind == 0 sentinel) */
+    IR_RETURN,            /* return op1; op1.kind == ADDR_NONE si es void */
     IR_PRINTLN,           /* println op1 */
     IR_READ               /* dst = read <tipo de dst>  (entrada estándar) */
 } IROp;
@@ -83,7 +114,13 @@ typedef enum {
 typedef struct {
     IROp op;
     Addr dst, op1, op2;
-    const char* sym;      /* "+", "-", ... para BINOP/UNOP; o nombre de fn */
+    /* "+", "-", ... para BINOP/UNOP; o nombre de fn para IR_CALL.
+     * no-owned, y de procedencia mixta: casi siempre apunta a cadenas del AST
+     * (Node.op, Node.str_val, que el AST sí posee y libera), pero a veces a un
+     * literal estático — el "<" y el "+" que ir.c fabrica al desazucarar el
+     * `for` no vienen de ningún nodo. Nunca se libera: ni free() sobre un
+     * literal, ni doble free sobre lo que el AST ya libera. */
+    const char* sym;
 } Instr;
 
 /* Una función compilada. Los temporales (t1..t_temps) y las etiquetas
@@ -104,20 +141,35 @@ typedef struct {
     size_t      count, capacity;
 } IRProgram;
 
-/* API de la Etapa 4 (ir.c) — se implementa en el Plan 2.
+/* ---------- API de la Etapa 4 (ir.c) ----------
  *
- *   IRProgram kel_gen(Node* program);        // genera TAC desde el AST anotado
- *   void      kel_ir_print(const IRProgram*);
- *   void      kel_ir_free(IRProgram*);
+ * CUIDADO — tiempo de vida: IRFunction.params, ret_type y los Addr.type
+ * apuntan al AST sin poseerlo, y los ADDR_VAR / ADDR_CONST_STR apuntan a
+ * cadenas del AST. El AST debe seguir vivo mientras se use el IRProgram:
+ * llama a kel_free_ast() DESPUÉS de kel_ir_free(), nunca antes.
+ *
+ * AVISO PARA LA ETAPA 6 — colisión de nombres t1, t2...: en Kel, `t1` es un
+ * nombre de variable legal, y en el `--ir` sería textualmente idéntico al
+ * temporal t1. Aquí no chocan (ADDR_VAR y ADDR_TEMP son kinds distintos), pero
+ * al emitir C los dos se convertirían en el identificador `t1`. emit_c.c debe
+ * ponerles prefijo a los temporales (p.ej. `_t1`) o a las variables. El golden
+ * de flujo.kel usa una variable llamada `t` a propósito para dejar esto a la
+ * vista.
+ *
+ * HUECO CONOCIDO — el temporal de la condición del `for`: `for i in a..b` se
+ * desazucara a una comparación `i < b` que **no existe en el AST**, así que no
+ * hay `inferred_type` del que copiar y su Addr queda con `type == NULL`. Es un
+ * bool. La Etapa 6 puede asumirlo por el contexto (es el op1 de un
+ * IR_IF_FALSE_GOTO). Si algún día no bastara, la salida limpia es que ir.c
+ * construya su propio KelType — y entonces IRFunction pasaría a poseer
+ * KelTypes y kel_ir_free tendría que liberarlos, que hoy no hace.
  *
  * API de la Etapa 5 (optimize.c) — Plan 4.
  * API de la Etapa 6 (emit_c.c)   — Plan 3.
- *
- * CUIDADO — tiempo de vida: IRFunction.params y ret_type apuntan al AST sin
- * poseerlo, así que el AST debe seguir vivo mientras se use el IRProgram.
- * main.c libera el AST con kel_free_ast() justo tras el semántico; al conectar
- * kel_gen habrá que mover esa llamada detrás de la generación de IR y de la
- * emisión de C, o emit_c.c leerá memoria liberada.
  */
+
+IRProgram kel_gen(Node* program);          /* genera TAC desde el AST anotado */
+void      kel_ir_print(const IRProgram*);  /* imprime el TAC (--ir) */
+void      kel_ir_free(IRProgram*);
 
 #endif

@@ -265,23 +265,37 @@ static void fn_register(Sem* S, Node* fn) {
  * el parser no se enteran. Se registran como firmas sin parámetros en la
  * tabla de funciones, antes que las del usuario, de modo que fn_register
  * rechaza cualquier intento de redefinirlas. */
-static const struct { const char* name; KelTypeKind ret; } kel_builtins[] = {
+static const struct { const char* name; KelTypeKind ret; } kel_read_builtins[] = {
     { "read_int",   KT_INT    },
     { "read_float", KT_FLOAT  },
     { "read_line",  KT_STRING },
 };
-#define KEL_N_BUILTINS (sizeof(kel_builtins) / sizeof(kel_builtins[0]))
+#define KEL_N_READ_BUILTINS (sizeof(kel_read_builtins) / sizeof(kel_read_builtins[0]))
 
 static void register_builtins(Sem* S) {
-    for (size_t i = 0; i < KEL_N_BUILTINS; i++) {
+    for (size_t i = 0; i < KEL_N_READ_BUILTINS; i++) {
         FnSig* sig = (FnSig*)calloc(1, sizeof(FnSig));
-        sig->name = (char*)kel_builtins[i].name;   /* literal estático, no se libera */
+        sig->name = (char*)kel_read_builtins[i].name;   /* literal estático, no se libera */
         sig->params = NULL;
         sig->param_count = 0;
-        sig->ret_type = mk(kel_builtins[i].ret);
+        sig->ret_type = mk(kel_read_builtins[i].ret);
         sig->next = S->fns;
         S->fns = sig;
     }
+}
+
+int kel_is_read_builtin(const char* name) {
+    for (size_t i = 0; i < KEL_N_READ_BUILTINS; i++)
+        if (strcmp(name, kel_read_builtins[i].name) == 0) return 1;
+    return 0;
+}
+
+/* println no está en kel_read_builtins[]: esa tabla es de firmas que se
+ * registran en la tabla de funciones, y println no se registra — check_call
+ * lo trata aparte porque su argumento se valida por "imprimible", no por una
+ * firma fija. De ahí que su nombre se compruebe aquí explícitamente. */
+int kel_is_println(const char* name) {
+    return strcmp(name, "println") == 0;
 }
 
 /* ---------- Check de expresiones: retorna KelType* owned ---------- */
@@ -376,7 +390,7 @@ static KelType* check_call(Sem* S, Node* n) {
     const char* name = n->lhs->str_val;
 
     /* println built-in */
-    if (strcmp(name, "println") == 0) {
+    if (kel_is_println(name)) {
         if (n->item_count != 1) {
             err(S, n, "println requiere exactamente 1 argumento (recibió %zu)", n->item_count);
         } else {
@@ -691,8 +705,8 @@ SemResult kel_analyze(Node* prog) {
      * porque register_builtins los reservó con mk(). */
     while (S.fns) {
         FnSig* nx = S.fns->next;
-        for (size_t i = 0; i < KEL_N_BUILTINS; i++) {
-            if (strcmp(S.fns->name, kel_builtins[i].name) == 0) {
+        for (size_t i = 0; i < KEL_N_READ_BUILTINS; i++) {
+            if (strcmp(S.fns->name, kel_read_builtins[i].name) == 0) {
                 kel_type_free(S.fns->ret_type);
                 break;
             }

@@ -100,7 +100,12 @@ símbolos en el log y las firmas de los built-ins `read_*`.
 
 Traducción del AST anotado a TAC. La mayoría es directa (`N_BINOP` → `IR_BINOP`,
 `N_CALL` → `IR_PARAM`×n + `IR_CALL`, `N_IF`/`N_WHILE` → etiquetas y saltos).
-`for i in a..b` se desazucara a init + condición + incremento.
+`for i in a..b` se desazucara a init + condición + incremento, y **`b` se evalúa
+una sola vez** (decidido durante el Plan 2, commit `bcb6724`): el cálculo del fin
+se saca antes de la etiqueta de condición, y si es una variable se copia a un
+temporal — con la semántica de C, que reevalúa, `for i in 0..n { n = n + 1 }`
+era un bucle infinito. Documentado en SPEC.md, "El `for` de Kel no es el `for`
+de C".
 
 ### Cambios necesarios sobre el esqueleto de `codegen.h`
 
@@ -265,10 +270,10 @@ Tres funciones: `read_int() -> int`, `read_float() -> float`,
 `read_line() -> string`. Snake_case por coherencia con el sabor Rust del
 lenguaje (`println`, `read_line`).
 
-**No son palabras reservadas.** `println` es una sentencia (`TOKEN_PRINTLN` →
-`N_PRINTLN`), pero `read_int()` devuelve un valor, así que es una expresión — y
-`read_int` seguido de `(` ya parsea hoy como `N_CALL`, porque es un
-`TOKEN_IDENT` normal. Por tanto:
+**No son palabras reservadas.** `println` sí tiene token (`TOKEN_PRINTLN`), pero
+el parser lo trata como un identificador: `println(x)` es un `N_CALL` corriente.
+`read_int` no tiene ni token, y `read_int` seguido de `(` ya parsea hoy como
+`N_CALL` porque es un `TOKEN_IDENT` normal. Por tanto:
 
 - **Lexer y parser: cero cambios.** No hay tokens nuevos.
 - `semantic.c`: registrar las tres firmas en la tabla de funciones e impedir su
@@ -287,11 +292,18 @@ simplemente repite las tres cadenas literales (`"read_int"`, `"read_float"`,
 `"read_line"`) para reconocerlas, es la misma duplicación de nombres que
 este proyecto ya tuvo que limpiar una vez — dos listas que se pueden
 desincronizar si algún día se agrega un cuarto builtin. La implementación
-del Plan 2 debe exponer una consulta desde `semantic.h` (por ejemplo,
-`int kel_is_builtin(const char* name)`) que `ir.c` pueda llamar, en vez de
-hardcodear los tres nombres de nuevo. No se agrega esa API todavía —nada la
-consume hasta que `ir.c` exista— pero debe entrar como parte del trabajo de
-la Etapa 4, no como deuda a mitad de esa implementación.
+del Plan 2 debe exponer una consulta desde `semantic.h` que `ir.c` pueda
+llamar, en vez de hardcodear los tres nombres de nuevo. No se agrega esa API
+todavía —nada la consume hasta que `ir.c` exista— pero debe entrar como parte
+del trabajo de la Etapa 4, no como deuda a mitad de esa implementación.
+
+Lo implementado (Plan 2, Task 1) son **dos** predicados, no uno:
+`int kel_is_println(const char*)` e `int kel_is_read_builtin(const char*)`.
+Son las dos preguntas que `gen_call` hace de verdad, porque despacha a tres
+bandas: println → `IR_PRINTLN`, read_* → `IR_READ`, resto → `IR_CALL`. Un
+único `kel_is_builtin` que respondiera "es alguno de los cuatro" no le sirve a
+nadie: `gen_call` tendría que volver a preguntar cuál, hardcodeando `"println"`
+y devolviendo la duplicación por la puerta de atrás.
 
 ### 5.2 — Tabla de símbolos visible (`--symbols`)
 

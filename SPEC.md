@@ -125,7 +125,34 @@ for i in 0..10 {
 ```
 
 - `for` itera sobre un rango `inicio..fin` (fin exclusivo)
+- **El `fin` se evalúa una sola vez**, al entrar al bucle — no en cada vuelta.
+  La variable del bucle es inmutable dentro del cuerpo.
 - No hay `break` ni `continue` en v1 (simplificación deliberada)
+
+#### El `for` de Kel no es el `for` de C
+
+En C, `for (i = 0; i < n; i++)` reevalúa `n` en **cada** iteración. El `for` de
+Kel no: el fin se calcula una vez y se congela. Es la semántica de Rust y de
+Kotlin, de donde viene la sintaxis `0..10`.
+
+La diferencia se ve cuando el fin no es constante:
+
+```kel
+var n = 3
+for i in 0..n {
+  n = n + 1      // no afecta al bucle: itera 3 veces y termina
+}
+
+for i in 0..limite() {
+  ...            // limite() se llama UNA vez, no en cada vuelta
+}
+```
+
+Con la regla de C, el primero sería un **bucle infinito** (`n - i` se mantiene
+invariante) y el segundo llamaría a `limite()` una vez por iteración. Se ve en
+el código intermedio: `./kelc --ir` saca el cálculo del fin fuera de la etiqueta
+de condición, y si el fin es una variable la copia a un temporal, porque el
+cuerpo podría reasignarla.
 
 ### Arrays
 
@@ -168,16 +195,37 @@ val s = read_line()      // lee una línea completa, incluidos espacios
   añadir un built-in no toca el autómata léxico ni la gramática.
 - Redefinirlas es un error: `fn read_int() -> int { ... }` no compila.
 
-#### ¿Por qué `println` sí es palabra clave y `read_*` no?
+#### ¿Por qué `println` sí es palabra reservada y `read_*` no?
 
-Porque son cosas gramaticalmente distintas. `println(x)` es una **sentencia**:
-no produce valor y no puede aparecer dentro de una expresión, así que necesita
-su propia regla en la gramática y su token (`TOKEN_PRINTLN`).
+La diferencia está en el **léxico, no en la gramática**. `println` tiene token
+propio (`TOKEN_PRINTLN`), pero **no tiene producción propia**: aparece en la
+regla de `primary` como una alternativa más junto a `IDENT`
+(`primary ::= IDENT | PRINTLN | ...`), el parser lo acepta en la misma rama que
+a un identificador cualquiera y construye un `N_IDENT`. De ahí en adelante el
+camino es idéntico al de cualquier llamada: `println(x)` llega al semántico como
+un `N_CALL` normal, igual que `read_int()`.
 
-`read_int()` es una **expresión**: produce un valor y tiene que poder aparecer
-donde quepa cualquier otro (`val a = read_int()`, `read_int() + 1`). Eso es
-exactamente lo que ya hace una llamada a función, de modo que no necesita ni
-token ni regla nueva — basta con registrar su firma.
+Que `println(x)` no sirva dentro de una expresión no lo impone la gramática,
+sino el **sistema de tipos**: `check_call` le da tipo `void`. Por eso
+`val a: int = println(1)` falla con *"inicializador de 'a': esperado int,
+encontrado void"*, palabra por palabra el mismo error que da una función void
+del usuario:
+
+```kel
+fn f() {}
+val a: int = f()      // inicializador de 'a': esperado int, encontrado void
+```
+
+Lo único que compra `TOKEN_PRINTLN` es **reservar la palabra**: el lexer nunca
+la entrega como identificador, de modo que `var println: int = 5` no compila
+(*"se esperaba nombre de variable (token 'println')"*).
+
+Ese es el intercambio. Reservar cuesta un token y a cambio protege el nombre.
+No reservar deja el lexer intacto, pero el nombre queda libre: `var read_int:
+int = 5` **compila**. No llega a romper nada — las variables y las funciones
+viven en tablas distintas, así que `read_int()` sigue llamando al built-in
+mientras `read_int` a secas es la variable —, pero es código legal y confuso
+que el compilador no ataja.
 
 La consecuencia práctica: añadir un built-in de entrada no toca el lexer ni el
 parser, solo la tabla de funciones del análisis semántico.
@@ -315,7 +363,7 @@ src/
   semantic.h/ semantic.c   — Etapa 3: tabla de símbolos + chequeo de tipos
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
   ir.h                     — Etapa 4: tipos del código intermedio (TAC)
-  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  ir.c                     — Etapa 4: generación de TAC
   optimize.h/ optimize.c   — Etapa 5: optimización local            (pendiente)
   emit_c.h  / emit_c.c     — Etapa 6: generación de C               (pendiente)
   symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
@@ -335,6 +383,7 @@ Makefile
 ./kelc --ast programa.kel    # debug sintáctico/semántico
 ./kelc --sem programa.kel    # solo fase semántica
 ./kelc --symbols programa.kel # tabla de símbolos
+./kelc --ir programa.kel     # código intermedio (Etapa 4)
 ./kelc --help                # ayuda
 ```
 

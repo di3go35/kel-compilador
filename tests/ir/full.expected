@@ -1,0 +1,125 @@
+fn mul(a: int, b: int) -> int {
+  t1 = a * b
+  return t1
+}
+
+fn div(a: int, b: int) -> int {
+  t1 = a / b
+  return t1
+}
+
+fn neg(a: int) -> int {
+  t1 = -a
+  return t1
+}
+
+fn cadena(s: string) -> string {
+  t1 = s + "!"
+  return t1
+}
+
+fn main() {
+  i = 42
+  f = 3.14
+  b = true
+  s = "hola"
+  t1 = alloc int[3]
+  t1[0] = 1
+  t1[1] = 2
+  t1[2] = 3
+  ai = t1
+  t2 = alloc float[2]
+  t2[0] = 1.0
+  t2[1] = 2.0
+  af = t2
+  t3 = alloc bool[2]
+  t3[0] = true
+  t3[1] = false
+  ab = t3
+  t4 = alloc string[2]
+  t4[0] = "a"
+  t4[1] = "b"
+  as = t4
+  t5 = i + 1
+  t6 = 2 * 3
+  t7 = t6 / 1
+  t8 = t5 - t7
+  r = t8
+  t9 = i == 42
+  c1 = t9
+  t10 = i != 0
+  c2 = t10
+  t11 = i < 100
+  c3 = t11
+  t12 = i > 0
+  c4 = t12
+  t13 = i <= 42
+  c5 = t13
+  t14 = i >= 42
+  c6 = t14
+  t15 = c1
+  ifFalse t15 goto L1
+  t15 = c2
+L1:
+  l1 = t15
+  t16 = c3
+  if t16 goto L2
+  t16 = c4
+L2:
+  l2 = t16
+  t17 = !c1
+  l3 = t17
+  t18 = r + 1
+  r = t18
+  t19 = alloc int[3]
+  t19[0] = 10
+  t19[1] = 20
+  t19[2] = 30
+  arr = t19
+  arr[0] = 99
+  j = 0
+L3:
+  t20 = j < 5
+  ifFalse t20 goto L4
+  t21 = r + j
+  r = t21
+  t22 = j + 1
+  j = t22
+  goto L3
+L4:
+  k = 0
+L5:
+  t23 = k < 3
+  ifFalse t23 goto L6
+  t24 = k + 1
+  k = t24
+  goto L5
+L6:
+  t25 = i > 100
+  ifFalse t25 goto L7
+  println "grande"
+  goto L8
+L7:
+  t26 = i > 10
+  ifFalse t26 goto L9
+  println "mediano"
+  goto L10
+L9:
+  println "chico"
+L10:
+L8:
+  param 2
+  t27 = call neg, 1
+  param t27
+  param 3
+  t28 = call mul, 2
+  m = t28
+  param 10
+  param 2
+  t29 = call div, 2
+  d = t29
+  param s
+  t30 = call cadena, 1
+  t = t30
+  println t
+}

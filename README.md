@@ -31,8 +31,10 @@ fn main() {
 ## Estado
 
 **Unidad I completa** (lexer, parser, análisis semántico) con tabla de
-símbolos visible (`--symbols`) y built-ins de entrada. Unidad II (código
-intermedio, optimización, generación final) en curso.
+símbolos visible (`--symbols`) y built-ins de entrada. De la Unidad II, la
+**Etapa 4 está hecha**: `--ir` muestra el código intermedio (TAC) de cualquier
+programa válido. Quedan la optimización (Etapa 5) y la generación de código
+final (Etapa 6).
 
 ## Requisitos
 
@@ -55,6 +57,7 @@ Genera el ejecutable `kelc` (o `kelc.exe` en Windows).
 ./kelc --tokens programa.kel   # muestra el stream de tokens
 ./kelc --ast programa.kel      # muestra el AST con tipos inferidos
 ./kelc --symbols programa.kel  # muestra la tabla de símbolos
+./kelc --ir programa.kel       # muestra el código intermedio TAC (Etapa 4)
 ./kelc --sem programa.kel      # solo reporta resultado semántico
 ./kelc --help                  # ayuda
 ```
@@ -84,7 +87,7 @@ src/
   semantic.h/ semantic.c   — Etapa 3: tabla de símbolos + chequeo de tipos
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
   ir.h                     — Etapa 4: tipos del código intermedio (TAC)
-  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  ir.c                     — Etapa 4: generación de TAC
   symtab.h  / symtab.c     — log de la tabla de símbolos
   main.c                   — CLI
 tests/

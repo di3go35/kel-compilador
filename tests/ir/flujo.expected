@@ -1,0 +1,39 @@
+fn main() {
+  t = 0
+  t1 = t > 0
+  ifFalse t1 goto L1
+  t = 1
+  goto L2
+L1:
+  t = 2
+L2:
+L3:
+  t2 = t < 5
+  ifFalse t2 goto L4
+  t3 = t + 1
+  t = t3
+  goto L3
+L4:
+  i = 0
+L5:
+  t4 = i < 3
+  ifFalse t4 goto L6
+  t5 = t + i
+  t = t5
+  t6 = i + 1
+  i = t6
+  goto L5
+L6:
+  n = 3
+  j = 0
+  t7 = n
+L7:
+  t8 = j < t7
+  ifFalse t8 goto L8
+  t9 = n + 1
+  n = t9
+  t10 = j + 1
+  j = t10
+  goto L7
+L8:
+}

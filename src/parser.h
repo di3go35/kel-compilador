@@ -38,7 +38,6 @@ typedef enum {
     N_RETURN,
     N_EXPR_STMT,
     N_BLOCK,
-    N_PRINTLN,
     /* top level */
     N_FUNCTION,
     N_PROGRAM
