@@ -283,13 +283,28 @@ main.for    i              int       val     24     32  —
 suma        a              int       val      0      1  —
 ```
 
-- **`Despl`** es el desplazamiento relativo al marco de pila, calculado sumando
-  los tamaños de cada tipo (`int`=4, `float`=8, `bool`=1, `string`=8 por ser
-  puntero, arreglo = n×tamaño del elemento), **alineado al tamaño del tipo**.
+- **`Despl`** es el desplazamiento relativo al marco de la función, **alineado al
+  tamaño del tipo**, con este modelo de tamaños:
+
+  | Tipo | Tamaño | Alineación |
+  |------|--------|-----------|
+  | `int` | 4 | 4 |
+  | `float` | 8 | 8 |
+  | `bool` | 1 | 1 |
+  | `string` | 8 (puntero) | 8 |
+  | `[T]` | 8 (referencia) | 8 |
+
   No es una dirección absoluta: en Kel las direcciones reales las decide gcc.
   El PDF muestra direcciones tipo 100/104, pero inventarlas sería un dato falso;
-  el desplazamiento tiene la misma forma y es un dato que el compilador calcula
-  de verdad.
+  el desplazamiento tiene la misma forma y lo calcula el compilador de verdad.
+
+  **Los arreglos cuentan como una referencia de 8 bytes, no como n×elemento.**
+  Motivo: `KelType` no guarda el tamaño del arreglo — `[int]` no dice cuántos
+  elementos — así que n no está disponible desde el tipo. Es exactamente cierto
+  para parámetros (§3.4: los arreglos se pasan por referencia) y es una
+  simplificación declarada para locales, donde el C generado los coloca inline.
+  El desplazamiento es un modelo del marco, no un compromiso con el layout que
+  gcc acabe eligiendo, así que la simplificación es honesta mientras se declare.
 - **`Valor`** se llena solo cuando el inicializador es una constante conocida en
   compilación; si no, `—`. La tabla de símbolos no conoce valores de runtime.
 - **`Ámbito`** y **`Mut`** no están en el ejemplo del PDF, pero son información
@@ -529,20 +544,31 @@ del compilador ya funciona como esbozo de manual de usuario.
 
 ## 8. Orden de implementación
 
-Cada paso deja el repo en verde (compila y pasa tests):
+**Las etapas se implementan en orden 4 → 6 → 5, no 4 → 5 → 6.**
 
-1. Renombrar `codegen.h` → `ir.h`; reestructurar a `IRFunction`/`IRProgram`;
-   añadir `IR_ARRAY_NEW` e `IR_READ`.
-2. `symtab.c` + `--symbols`.
-3. Built-ins `read_*` en `semantic.c` (type-checkean; aún no generan código).
-4. **Etapa 4:** `ir.c` + `--ir`, incluyendo cortocircuito y arreglos.
-5. **Etapa 5:** `optimize.c` + `--opt`, sobre bloques básicos.
-6. **Etapa 6:** `emit_c.c` + runtime + `--emit-c` + `-o`.
-7. `--stats`.
-8. Suite: `tests/run/`, equivalencia con/sin `--opt`, `tests/opt/`,
-   `tests/read/`.
-9. `docs/GRAMMAR.md`, `docs/AUTOMATA.md` + `.drawio`.
-10. Correcciones de README.md y SPEC.md.
+La razón es de verificación. La prueba de equivalencia (§6.2) — la más valiosa
+del proyecto — necesita *ejecutar* los programas con y sin `--opt` y comparar
+salidas, lo que exige emitir C y compilarlo. Es decir: **exige la Etapa 6**.
+Construir el optimizador antes que el generador significaría escribirlo entero
+sin la única prueba capaz de detectar sus bugs, y descubrirlos después todos
+juntos sin saber qué pase los causó.
+
+Con el orden 4 → 6 → 5, al terminar la Etapa 6 existe un compilador completo y
+funcionando, y cada pase del optimizador se valida contra toda la suite en el
+momento de añadirlo. El coste es que el orden de construcción no coincide con
+el orden de exposición, lo cual es irrelevante: el código final es el mismo y
+la narrativa del informe la decide el grupo.
+
+Cada paso deja el repo en verde (compila y pasa tests). Cada plan produce
+software funcionando por sí solo.
+
+| Plan | Pasos | Al terminar |
+|------|-------|-------------|
+| 1 | Renombrar `codegen.h` → `ir.h`; `IRFunction`/`IRProgram`; opcodes `IR_ARRAY_NEW` e `IR_READ`. `symtab.c` + `--symbols`. Built-ins `read_*` en `semantic.c` (type-checkean; aún no generan código). | Tabla de símbolos visible; `read_*` type-checkea |
+| 2 | **Etapa 4:** `ir.c` + `--ir`, incluyendo cortocircuito y arreglos. | El TAC visible |
+| 3 | **Etapa 6:** `emit_c.c` + runtime + `--emit-c` + `-o`. Suite `tests/run/` y `tests/read/`. | **Compilador completo funcionando** |
+| 4 | **Etapa 5:** `optimize.c` + `--opt` sobre bloques básicos. Prueba de equivalencia + `tests/opt/`. | Optimizador con red de seguridad |
+| 5 | `--stats`. `docs/GRAMMAR.md`, `docs/AUTOMATA.md` + `.drawio`. Correcciones de README.md y SPEC.md. | Los 3.5 pts de documentación |
 
 ---
 
