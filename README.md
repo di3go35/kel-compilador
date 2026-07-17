@@ -32,9 +32,11 @@ fn main() {
 
 **Unidad I completa** (lexer, parser, análisis semántico) con tabla de
 símbolos visible (`--symbols`) y built-ins de entrada. De la Unidad II, las
-**Etapas 4 y 6 están hechas**: `--ir` muestra el código intermedio (TAC) de
-cualquier programa válido, `--emit-c` genera el C equivalente y `-o` lo compila
-con gcc hasta un ejecutable. Queda la optimización (Etapa 5).
+**Etapas 4, 5 y 6 están hechas**: `--ir` muestra el código intermedio (TAC) de
+cualquier programa válido, `--opt` lo optimiza (propagación de constantes y
+copias, plegado, simplificación algebraica y eliminación de código muerto, por
+bloque básico), `--emit-c` genera el C equivalente y `-o` lo compila con gcc
+hasta un ejecutable.
 
 ## Requisitos
 
@@ -58,6 +60,7 @@ Genera el ejecutable `kelc` (o `kelc.exe` en Windows).
 ./kelc --ast programa.kel      # muestra el AST con tipos inferidos
 ./kelc --symbols programa.kel  # muestra la tabla de símbolos
 ./kelc --ir programa.kel       # muestra el código intermedio TAC (Etapa 4)
+./kelc --opt programa.kel      # muestra el TAC optimizado (Etapa 5)
 ./kelc --emit-c programa.kel > programa.c   # imprime el C generado (Etapa 6)
 ./kelc programa.kel -o programa             # ejecutable vía gcc (Etapa 6)
 ./kelc --sem programa.kel      # solo reporta resultado semántico

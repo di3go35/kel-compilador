@@ -364,7 +364,7 @@ src/
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
   ir.h                     — Etapa 4: tipos del código intermedio (TAC)
   ir.c                     — Etapa 4: generación de TAC
-  optimize.h/ optimize.c   — Etapa 5: optimización local            (pendiente)
+  optimize.h/ optimize.c   — Etapa 5: optimización local
   emit_c.h  / emit_c.c     — Etapa 6: generación de C
   symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
   main.c                   — CLI
@@ -384,6 +384,7 @@ Makefile
 ./kelc --sem programa.kel    # solo fase semántica
 ./kelc --symbols programa.kel # tabla de símbolos
 ./kelc --ir programa.kel     # código intermedio (Etapa 4)
+./kelc --opt programa.kel    # TAC optimizado (Etapa 5)
 ./kelc --emit-c programa.kel > programa.c   # imprime el C generado (Etapa 6)
 ./kelc programa.kel -o programa             # ejecutable vía gcc (Etapa 6)
 ./kelc --help                # ayuda
