@@ -1,0 +1,7 @@
+fn escala(x: int) -> int {
+  return x * 1 + 0
+}
+
+fn main() {
+  println(escala(9))
+}

@@ -131,6 +131,35 @@ static int try_fold(Instr* in) {
     return 0;
 }
 
+/* Copia dst = src, conservando dst. src puede ser una ubicación o constante. */
+static void make_copy_src(Instr* in, Addr src) { make_copy(in, src); }
+
+/* Identidades algebraicas, SOLO sobre enteros: en flotante x*0 != 0 (NaN*0) y
+ * x+0 puede cambiar el signo del cero. El tipo del resultado del BINOP manda. */
+static int try_algebraic(Instr* in) {
+    if (in->op != IR_BINOP) return 0;
+    if (!(in->dst.type && in->dst.type->kind == KT_INT)) return 0;
+    const char* o = in->sym;
+    Addr a = in->op1, b = in->op2;
+    int a0 = (a.kind == ADDR_CONST_INT && a.i == 0);
+    int a1 = (a.kind == ADDR_CONST_INT && a.i == 1);
+    int b0 = (b.kind == ADDR_CONST_INT && b.i == 0);
+    int b1 = (b.kind == ADDR_CONST_INT && b.i == 1);
+    if (strcmp(o, "+") == 0) {
+        if (b0) { make_copy_src(in, a); return 1; }
+        if (a0) { make_copy_src(in, b); return 1; }
+    } else if (strcmp(o, "-") == 0) {
+        if (b0) { make_copy_src(in, a); return 1; }
+    } else if (strcmp(o, "*") == 0) {
+        if (b1) { make_copy_src(in, a); return 1; }
+        if (a1) { make_copy_src(in, b); return 1; }
+        if (b0 || a0) { make_copy(in, const_int(0, in->dst.type)); return 1; }
+    } else if (strcmp(o, "/") == 0) {
+        if (b1) { make_copy_src(in, a); return 1; }
+    }
+    return 0;
+}
+
 /* ¿Escribe esta instrucción una ubicación (dst como DESTINO)? Devuelve la Addr
  * escrita o NULL. OJO: IR_INDEX_STORE NO escribe dst (dst es su fuente, ver
  * ir.h), y IR_CALL void tampoco. */
@@ -184,7 +213,8 @@ static int local_pass(IRFunction* f) {
         if (in->op == IR_LABEL) { env_clear(&e); continue; }   /* nueva frontera */
         changed |= rewrite_operand(&e, &in->op1);
         changed |= rewrite_operand(&e, &in->op2);
-        changed |= try_fold(in);
+        if (try_fold(in)) changed = 1;
+        else if (try_algebraic(in)) changed = 1;
         update_env(&e, in);
         if (is_block_end(in->op)) env_clear(&e);
     }
