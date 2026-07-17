@@ -237,6 +237,30 @@ static void fn_register(Sem* S, Node* fn) {
     S->fns = sig;
 }
 
+/* Built-ins de entrada. No son palabras reservadas: read_int es un
+ * TOKEN_IDENT normal y read_int() ya parsea como N_CALL, así que el lexer y
+ * el parser no se enteran. Se registran como firmas sin parámetros en la
+ * tabla de funciones, antes que las del usuario, de modo que fn_register
+ * rechaza cualquier intento de redefinirlas. */
+static const struct { const char* name; KelTypeKind ret; } kel_builtins[] = {
+    { "read_int",   KT_INT    },
+    { "read_float", KT_FLOAT  },
+    { "read_line",  KT_STRING },
+};
+#define KEL_N_BUILTINS (sizeof(kel_builtins) / sizeof(kel_builtins[0]))
+
+static void register_builtins(Sem* S) {
+    for (size_t i = 0; i < KEL_N_BUILTINS; i++) {
+        FnSig* sig = (FnSig*)calloc(1, sizeof(FnSig));
+        sig->name = (char*)kel_builtins[i].name;   /* literal estático, no se libera */
+        sig->params = NULL;
+        sig->param_count = 0;
+        sig->ret_type = mk(kel_builtins[i].ret);
+        sig->next = S->fns;
+        S->fns = sig;
+    }
+}
+
 /* ---------- Check de expresiones: retorna KelType* owned ---------- */
 
 static KelType* check_expr(Sem* S, Node* n);
@@ -616,6 +640,9 @@ SemResult kel_analyze(Node* prog) {
     S.current_ret = NULL;
     S.errors = 0;
 
+    /* Los built-ins van primero: así fn_register rechaza redefinirlos. */
+    register_builtins(&S);
+
     /* Pass 1: registrar funciones */
     int has_main = 0;
     for (size_t i = 0; i < prog->item_count; i++) {
@@ -636,8 +663,20 @@ SemResult kel_analyze(Node* prog) {
     for (size_t i = 0; i < prog->item_count; i++)
         check_function(&S, prog->items[i]);
 
-    /* Libera fn signatures (solo contenedor) */
-    while (S.fns) { FnSig* nx = S.fns->next; free(S.fns); S.fns = nx; }
+    /* Libera fn signatures. Los ret_type de las funciones del usuario son
+     * referencias al AST y no se liberan aquí; los de los built-ins sí,
+     * porque register_builtins los reservó con mk(). */
+    while (S.fns) {
+        FnSig* nx = S.fns->next;
+        for (size_t i = 0; i < KEL_N_BUILTINS; i++) {
+            if (strcmp(S.fns->name, kel_builtins[i].name) == 0) {
+                kel_type_free(S.fns->ret_type);
+                break;
+            }
+        }
+        free(S.fns);
+        S.fns = nx;
+    }
 
     SemResult r;
     r.errors = S.errors;

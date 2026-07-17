@@ -1,0 +1,10 @@
+fn main() {
+  val a = read_int()
+  val b = read_float()
+  val s = read_line()
+  val suma: int = a + 1
+  val prod: float = b * 2.0
+  println(s)
+  println(suma)
+  println(prod)
+}
