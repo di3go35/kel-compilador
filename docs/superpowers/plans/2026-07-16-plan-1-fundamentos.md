@@ -101,11 +101,18 @@ En `SPEC.md`, dentro del bloque "Estructura del proyecto", reemplazar:
 por:
 
 ```
-  ir.h      / ir.c         — Etapa 4: generación de código intermedio (TAC)
-  optimize.h/ optimize.c   — Etapa 5: optimización local sobre bloques básicos
-  emit_c.h  / emit_c.c     — Etapa 6: generación de C
-  symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
+  ir.h                     — Etapa 4: tipos del código intermedio (TAC)
+  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  optimize.h/ optimize.c   — Etapa 5: optimización local            (pendiente)
+  emit_c.h  / emit_c.c     — Etapa 6: generación de C               (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
 ```
+
+**Los marcadores `(pendiente)` son obligatorios.** El bloque describe la
+estructura del repo, y listar archivos que no existen manda al lector (el
+profesor, durante la defensa) a buscar un `optimize.c` que no está. El texto
+original decía "esqueleto" justo por eso; esa señal no se puede perder.
+`ir.h` e `ir.c` van en líneas separadas porque solo existe el header.
 
 Y en la sección "Roadmap", donde dice:
 
@@ -130,9 +137,12 @@ En `README.md`, bloque "Estructura del proyecto", reemplazar:
 por:
 
 ```
-  ir.h      / ir.c         — Etapa 4: código intermedio (TAC)
-  symtab.h  / symtab.c     — log de la tabla de símbolos
+  ir.h                     — Etapa 4: tipos del código intermedio (TAC)
+  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
 ```
+
+El marcador de `symtab` se quita en el Task 3, que es donde se crea de verdad.
 
 - [ ] **Step 7: Verificar que sigue compilando**
 
@@ -463,10 +473,40 @@ Nota: si gcc avisa de `defined but not used`, es un falso problema — son funci
 Run: `bash tests/run_tests.sh`
 Expected: "Resultado: 9 pasaron, 0 fallaron."
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Quitar el marcador `(pendiente)` de symtab en la documentación**
+
+`symtab.h` y `symtab.c` ya existen, así que el marcador que puso el Task 1 ahora miente al revés.
+
+En `SPEC.md`, en el bloque "Estructura del proyecto", reemplazar:
+
+```
+  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
+```
+
+por:
+
+```
+  symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
+```
+
+En `README.md`, en el mismo bloque, reemplazar:
+
+```
+  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
+```
+
+por:
+
+```
+  symtab.h  / symtab.c     — log de la tabla de símbolos
+```
+
+Verificar la regla que fija el Task 1: todo archivo listado sin `(pendiente)` debe existir. Run: `ls src/`
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/symtab.h src/symtab.c Makefile
+git add src/symtab.h src/symtab.c Makefile SPEC.md README.md
 git commit -m "Añadir symtab.c: log append-only de declaraciones
 
 scope_pop libera los símbolos al cerrar cada scope, así que al terminar
