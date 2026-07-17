@@ -4,6 +4,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Privado: nada fuera de este archivo lee una entrada, sólo se añaden y se
+ * imprimen. El modelo del campo `offset` está documentado en symtab.h. */
+typedef struct {
+    char*    scope;       /* owned: "main", "main.for", "suma" */
+    char*    name;        /* owned */
+    KelType* type;        /* owned */
+    int      is_mutable;  /* 0 = val, 1 = var */
+    int      offset;      /* desplazamiento en el marco */
+    int      line;
+    char*    value;       /* owned; NULL si no es constante conocida */
+} SymEntry;
+
 static SymEntry* g_log = NULL;
 static size_t    g_count = 0;
 static size_t    g_cap = 0;
@@ -28,20 +40,6 @@ int kel_type_align(const KelType* t) {
     return s > 0 ? s : 1;
 }
 
-static KelType* type_copy(const KelType* t) {
-    if (!t) return NULL;
-    KelType* n = (KelType*)calloc(1, sizeof(KelType));
-    n->kind = t->kind;
-    n->elem = type_copy(t->elem);
-    return n;
-}
-
-static void type_release(KelType* t) {
-    if (!t) return;
-    type_release(t->elem);
-    free(t);
-}
-
 void kel_symlog_add(const char* scope, const char* name, const KelType* type,
                     int is_mutable, int offset, int line, const char* value) {
     if (g_count == g_cap) {
@@ -51,7 +49,7 @@ void kel_symlog_add(const char* scope, const char* name, const KelType* type,
     SymEntry* e = &g_log[g_count++];
     e->scope      = strdup(scope ? scope : "");
     e->name       = strdup(name ? name : "");
-    e->type       = type_copy(type);
+    e->type       = kel_type_clone(type);
     e->is_mutable = is_mutable;
     e->offset     = offset;
     e->line       = line;
@@ -87,7 +85,7 @@ void kel_symlog_free(void) {
     for (size_t i = 0; i < g_count; i++) {
         free(g_log[i].scope);
         free(g_log[i].name);
-        type_release(g_log[i].type);
+        kel_type_free(g_log[i].type);
         free(g_log[i].value);
     }
     free(g_log);

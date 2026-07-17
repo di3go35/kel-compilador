@@ -16,16 +16,6 @@
  * esas las decide gcc. Los arreglos cuentan como una referencia de 8 bytes
  * porque KelType no guarda el número de elementos. */
 
-typedef struct {
-    char*    scope;       /* owned: "main", "main.for", "suma" */
-    char*    name;        /* owned */
-    KelType* type;        /* owned */
-    int      is_mutable;  /* 0 = val, 1 = var */
-    int      offset;      /* desplazamiento en el marco */
-    int      line;
-    char*    value;       /* owned; NULL si no es constante conocida */
-} SymEntry;
-
 /* Copia todo lo que recibe: el llamante conserva la propiedad de sus datos.
  * `value` puede ser NULL. */
 void   kel_symlog_add(const char* scope, const char* name, const KelType* type,

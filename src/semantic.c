@@ -37,19 +37,7 @@ typedef struct {
 
 /* ---------- Tipos helpers ---------- */
 
-static KelType* type_clone(const KelType* t) {
-    if (!t) return NULL;
-    KelType* n = (KelType*)calloc(1, sizeof(KelType));
-    n->kind = t->kind;
-    n->elem = type_clone(t->elem);
-    return n;
-}
-
-static void type_free(KelType* t) {
-    if (!t) return;
-    type_free(t->elem);
-    free(t);
-}
+/* El clon y la liberación de KelType viven en parser.c (ver parser.h). */
 
 static int type_eq(const KelType* a, const KelType* b) {
     if (!a || !b) return 0;
@@ -90,7 +78,7 @@ static void scope_pop(Sem* S) {
     while (sym) {
         Symbol* nx = sym->next;
         free(sym->name);
-        type_free(sym->type);
+        kel_type_free(sym->type);
         free(sym);
         sym = nx;
     }
@@ -119,7 +107,7 @@ static int declare(Sem* S, const char* name, KelType* type, int mutable, const N
     }
     Symbol* sy = (Symbol*)calloc(1, sizeof(Symbol));
     sy->name = strdup(name);
-    sy->type = type_clone(type);
+    sy->type = kel_type_clone(type);
     sy->is_mutable = mutable;
     sy->next = S->scope->head;
     S->scope->head = sy;
@@ -206,8 +194,8 @@ static KelType* check_binop(Sem* S, Node* n) {
 
     err(S, n, "operador desconocido '%s'", op);
 out:
-    type_free(l);
-    type_free(r);
+    kel_type_free(l);
+    kel_type_free(r);
     return res;
 }
 
@@ -219,10 +207,10 @@ static KelType* check_unop(Sem* S, Node* n) {
         if (t->kind == KT_BOOL) res = mk(KT_BOOL);
         else err(S, n, "'!' requiere bool, encontrado %s", kel_type_name(t));
     } else if (!strcmp(n->op, "-")) {
-        if (t->kind == KT_INT || t->kind == KT_FLOAT) res = type_clone(t);
+        if (t->kind == KT_INT || t->kind == KT_FLOAT) res = kel_type_clone(t);
         else err(S, n, "'-' unario requiere int o float, encontrado %s", kel_type_name(t));
     }
-    type_free(t);
+    kel_type_free(t);
     return res;
 }
 
@@ -247,7 +235,7 @@ static KelType* check_call(Sem* S, Node* n) {
             KelType* at = check_expr(S, n->items[0]);
             if (at && !is_printable(at))
                 err(S, n, "println no acepta argumentos de tipo %s", kel_type_name(at));
-            type_free(at);
+            kel_type_free(at);
         }
         return mk(KT_VOID);
     }
@@ -256,7 +244,7 @@ static KelType* check_call(Sem* S, Node* n) {
     if (!f) {
         err(S, n, "función '%s' no definida", name);
         /* aún así chequear args */
-        for (size_t i = 0; i < n->item_count; i++) type_free(check_expr(S, n->items[i]));
+        for (size_t i = 0; i < n->item_count; i++) kel_type_free(check_expr(S, n->items[i]));
         return NULL;
     }
     if (n->item_count != f->param_count) {
@@ -271,9 +259,9 @@ static KelType* check_call(Sem* S, Node* n) {
             err(S, n->items[i], "argumento %zu de '%s': esperado %s, encontrado %s",
                 i + 1, name, kel_type_name(f->params[i].type), kel_type_name(at));
         }
-        type_free(at);
+        kel_type_free(at);
     }
-    return type_clone(f->ret_type);
+    return kel_type_clone(f->ret_type);
 }
 
 static KelType* check_index(Sem* S, Node* n) {
@@ -283,11 +271,11 @@ static KelType* check_index(Sem* S, Node* n) {
     if (arr && arr->kind != KT_ARRAY)
         err(S, n, "se intentó indexar valor de tipo %s", kel_type_name(arr));
     else if (arr)
-        res = type_clone(arr->elem);
+        res = kel_type_clone(arr->elem);
     if (idx && idx->kind != KT_INT)
         err(S, n->rhs, "índice debe ser int, encontrado %s", kel_type_name(idx));
-    type_free(arr);
-    type_free(idx);
+    kel_type_free(arr);
+    kel_type_free(idx);
     return res;
 }
 
@@ -295,7 +283,7 @@ static KelType* check_array_lit(Sem* S, Node* n, const KelType* hint) {
     /* Arrays vacíos: requieren hint (tipo esperado del contexto). */
     if (n->item_count == 0) {
         if (hint && hint->kind == KT_ARRAY)
-            return type_clone(hint);
+            return kel_type_clone(hint);
         err(S, n, "literal de array vacío sin tipo esperado del contexto");
         return NULL;
     }
@@ -306,7 +294,7 @@ static KelType* check_array_lit(Sem* S, Node* n, const KelType* hint) {
         if (t && !type_eq(first, t))
             err(S, n->items[i], "elemento %zu del array es %s, esperado %s",
                 i + 1, kel_type_name(t), kel_type_name(first));
-        type_free(t);
+        kel_type_free(t);
     }
     KelType* arr = mk(KT_ARRAY);
     arr->elem = first;
@@ -323,7 +311,7 @@ static KelType* check_expr_inner(Sem* S, Node* n, const KelType* hint) {
         case N_IDENT: {
             Symbol* sy = lookup(S, n->str_val);
             if (!sy) { err(S, n, "variable '%s' no declarada", n->str_val); return NULL; }
-            return type_clone(sy->type);
+            return kel_type_clone(sy->type);
         }
         case N_BINOP:     return check_binop(S, n);
         case N_UNOP:      return check_unop(S, n);
@@ -339,8 +327,8 @@ static KelType* check_expr_inner(Sem* S, Node* n, const KelType* hint) {
 static KelType* check_expr_h(Sem* S, Node* n, const KelType* hint) {
     KelType* t = check_expr_inner(S, n, hint);
     if (n && t) {
-        type_free(n->inferred_type);
-        n->inferred_type = type_clone(t);
+        kel_type_free(n->inferred_type);
+        n->inferred_type = kel_type_clone(t);
     }
     return t;
 }
@@ -364,13 +352,13 @@ static void check_var_decl(Sem* S, Node* n) {
         if (init_t && !type_eq(init_t, n->decl_type))
             err(S, n, "inicializador de '%s': esperado %s, encontrado %s",
                 n->decl_name, kel_type_name(n->decl_type), kel_type_name(init_t));
-        final_t = type_clone(n->decl_type);
+        final_t = kel_type_clone(n->decl_type);
     } else if (init_t) {
-        final_t = type_clone(init_t);
+        final_t = kel_type_clone(init_t);
     }
     if (final_t) declare(S, n->decl_name, final_t, n->is_mutable, n);
-    type_free(init_t);
-    type_free(final_t);
+    kel_type_free(init_t);
+    kel_type_free(final_t);
 }
 
 static void check_assign(Sem* S, Node* n) {
@@ -385,7 +373,7 @@ static void check_assign(Sem* S, Node* n) {
             err(S, n, "asignación a '%s': esperado %s, encontrado %s",
                 n->decl_name, kel_type_name(sy->type), kel_type_name(rhs));
     }
-    type_free(rhs);
+    kel_type_free(rhs);
 }
 
 static void check_index_assign(Sem* S, Node* n) {
@@ -403,15 +391,15 @@ static void check_index_assign(Sem* S, Node* n) {
         if (sy && !sy->is_mutable)
             err(S, n, "no se puede modificar elemento de 'val %s'", base->str_val);
     }
-    type_free(elem_t);
-    type_free(rhs);
+    kel_type_free(elem_t);
+    kel_type_free(rhs);
 }
 
 static void check_if(Sem* S, Node* n) {
     KelType* c = check_expr(S, n->cond);
     if (c && c->kind != KT_BOOL)
         err(S, n->cond, "condición de 'if' debe ser bool, encontrado %s", kel_type_name(c));
-    type_free(c);
+    kel_type_free(c);
     check_stmt(S, n->then_branch);
     if (n->else_branch) check_stmt(S, n->else_branch);
 }
@@ -420,7 +408,7 @@ static void check_while(Sem* S, Node* n) {
     KelType* c = check_expr(S, n->cond);
     if (c && c->kind != KT_BOOL)
         err(S, n->cond, "condición de 'while' debe ser bool, encontrado %s", kel_type_name(c));
-    type_free(c);
+    kel_type_free(c);
     check_stmt(S, n->body);
 }
 
@@ -431,12 +419,12 @@ static void check_for(Sem* S, Node* n) {
         err(S, n->range_start, "inicio de rango debe ser int, encontrado %s", kel_type_name(a));
     if (b && b->kind != KT_INT)
         err(S, n->range_end, "fin de rango debe ser int, encontrado %s", kel_type_name(b));
-    type_free(a); type_free(b);
+    kel_type_free(a); kel_type_free(b);
 
     scope_push(S);
     KelType* it = mk(KT_INT);
     declare(S, n->loop_var, it, 0, n);
-    type_free(it);
+    kel_type_free(it);
     /* El body es un N_BLOCK; check_block abre su propio scope anidado. */
     check_stmt(S, n->body);
     scope_pop(S);
@@ -463,7 +451,7 @@ static int stmt_always_returns(const Node* s) {
 
 static void check_return(Sem* S, Node* n) {
     KelType* t = n->lhs ? check_expr_h(S, n->lhs, S->current_ret) : mk(KT_VOID);
-    if (!S->current_ret) { type_free(t); return; }
+    if (!S->current_ret) { kel_type_free(t); return; }
     if (S->current_ret->kind == KT_VOID) {
         if (t && t->kind != KT_VOID)
             err(S, n, "función void no debe retornar valor");
@@ -472,7 +460,7 @@ static void check_return(Sem* S, Node* n) {
             err(S, n, "return: esperado %s, encontrado %s",
                 kel_type_name(S->current_ret), t ? kel_type_name(t) : "void");
     }
-    type_free(t);
+    kel_type_free(t);
 }
 
 static void check_stmt(Sem* S, Node* n) {
@@ -487,7 +475,7 @@ static void check_stmt(Sem* S, Node* n) {
         case N_RETURN:       check_return(S, n); break;
         case N_EXPR_STMT: {
             KelType* t = check_expr(S, n->lhs);
-            type_free(t);
+            kel_type_free(t);
             break;
         }
         case N_BLOCK:        check_block(S, n); break;

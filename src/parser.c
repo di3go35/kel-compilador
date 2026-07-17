@@ -74,12 +74,6 @@ static KelType* new_type(KelTypeKind k) {
     return t;
 }
 
-static void free_type(KelType* t) {
-    if (!t) return;
-    free_type(t->elem);
-    free(t);
-}
-
 /* ---------- Forward ---------- */
 static Node* parse_expr(Parser* p);
 static Node* parse_block(Parser* p);
@@ -457,7 +451,7 @@ ParseResult kel_parse(const TokenList* tokens) {
 static void free_params(Param* ps, size_t n) {
     for (size_t i = 0; i < n; i++) {
         free(ps[i].name);
-        free_type(ps[i].type);
+        kel_type_free(ps[i].type);
     }
     free(ps);
 }
@@ -478,13 +472,33 @@ void kel_free_ast(Node* n) {
     free(n->str_val);
     free(n->op);
     free(n->decl_name);
-    free_type(n->decl_type);
+    kel_type_free(n->decl_type);
     free(n->loop_var);
     free(n->fn_name);
     free_params(n->params, n->param_count);
-    free_type(n->ret_type);
-    free_type(n->inferred_type);
+    kel_type_free(n->ret_type);
+    kel_type_free(n->inferred_type);
     free(n);
+}
+
+/* ---------- Utilidades de KelType ---------- */
+
+/* parser.c es el hogar de KelType, así que el clon y la liberación viven
+ * aquí y los exporta parser.h. Antes semantic.c y symtab.c tenían cada uno
+ * su copia privada del mismo recorrido recursivo sobre elem. */
+
+KelType* kel_type_clone(const KelType* t) {
+    if (!t) return NULL;
+    KelType* n = (KelType*)calloc(1, sizeof(KelType));
+    n->kind = t->kind;
+    n->elem = kel_type_clone(t->elem);
+    return n;
+}
+
+void kel_type_free(KelType* t) {
+    if (!t) return;
+    kel_type_free(t->elem);
+    free(t);
 }
 
 /* ---------- Pretty printer ---------- */
