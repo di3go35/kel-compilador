@@ -255,6 +255,46 @@ static Addr gen_call(IRFunction* f, Node* n) {
     return d;
 }
 
+/* Un literal de array reserva y luego rellena: un IR_ARRAY_NEW y un
+ * IR_INDEX_STORE por elemento. El tamaño sale del AST (item_count), no del
+ * KelType, que no guarda el número de elementos — por eso `--symbols` cuenta
+ * los arreglos como una referencia de 8 bytes.
+ *
+ * El literal construye en un temporal y el N_VAR_DECL de fuera copia ese
+ * temporal a la variable. La copia sobra (nada más lee el temporal), pero es
+ * el mismo IR_COPY redundante que ya emiten var_decl y assign: la propagación
+ * de copias de la Etapa 5 lo limpia. */
+static Addr gen_array_lit(IRFunction* f, Node* n) {
+    Addr d = new_temp(f, n->inferred_type);
+    Instr in = instr(IR_ARRAY_NEW);
+    in.dst = d;
+    /* El tamaño no lleva tipo: el opcode ya lo implica (ver "Tipos" en ir.h). */
+    in.op1 = addr_const_int((long long)n->item_count, NULL);
+    emit(f, in);
+
+    for (size_t i = 0; i < n->item_count; i++) {
+        Addr v = gen_expr(f, n->items[i]);
+        Instr st = instr(IR_INDEX_STORE);
+        st.op1 = d;                                   /* arreglo */
+        st.op2 = addr_const_int((long long)i, NULL);  /* índice literal, sin tipo */
+        st.dst = v;                                   /* la FUENTE, no el destino (ver ir.h) */
+        emit(f, st);
+    }
+    return d;
+}
+
+static Addr gen_index(IRFunction* f, Node* n) {
+    Addr arr = gen_expr(f, n->lhs);   /* el arreglo va en lhs */
+    Addr idx = gen_expr(f, n->rhs);   /* el índice, en rhs */
+    Addr d = new_temp(f, n->inferred_type);
+    Instr in = instr(IR_INDEX_LOAD);
+    in.dst = d;
+    in.op1 = arr;
+    in.op2 = idx;
+    emit(f, in);
+    return d;
+}
+
 /* El `default` con fprintf es un andamio: cada task siguiente le va quitando
  * casos. Al cerrar la Etapa 4 no debe quedar ningún nodo cayendo aquí. */
 static Addr gen_expr(IRFunction* f, Node* n) {
@@ -267,6 +307,8 @@ static Addr gen_expr(IRFunction* f, Node* n) {
         case N_BINOP:     return gen_binop(f, n);
         case N_UNOP:      return gen_unop(f, n);
         case N_CALL:      return gen_call(f, n);
+        case N_ARRAY_LIT: return gen_array_lit(f, n);
+        case N_INDEX:     return gen_index(f, n);
         default:
             fprintf(stderr, "ir: nodo de expresión no soportado (kind %d)\n",
                     (int)n->kind);
@@ -288,6 +330,19 @@ static void gen_stmt(IRFunction* f, Node* n) {
              * Leer n->lhs aquí daría NULL y emitiría IR vacío en silencio. */
             Addr v = gen_expr(f, n->decl_init);
             emit_copy(f, addr_var(n->decl_name, n->decl_init->inferred_type), v);
+            break;
+        }
+        case N_INDEX_ASSIGN: {
+            /* lhs es el N_INDEX entero (arreglo + índice); rhs es el valor.
+             * No reserva temporal: el store consume las tres direcciones. */
+            Addr arr = gen_expr(f, n->lhs->lhs);
+            Addr idx = gen_expr(f, n->lhs->rhs);
+            Addr v   = gen_expr(f, n->rhs);
+            Instr in = instr(IR_INDEX_STORE);
+            in.op1 = arr;
+            in.op2 = idx;
+            in.dst = v;              /* la FUENTE, no el destino (ver ir.h) */
+            emit(f, in);
             break;
         }
         case N_BLOCK:
@@ -457,6 +512,41 @@ static void print_instr(const Instr* in) {
         case IR_PRINTLN:
             printf("  println ");
             print_addr(&in->op1);
+            printf("\n");
+            break;
+        case IR_ARRAY_NEW:
+            /* Se imprime "alloc int[3]", no "array[3]": `array` no es palabra
+             * reservada en Kel, así que `t1 = array[3]` se leería como indexar
+             * una variable llamada así.
+             *
+             * dst.type nunca es NULL, y su elem tampoco: dst.type es el
+             * inferred_type del literal y --ir solo corre con el semántico
+             * limpio (main.c). check_array_lit solo devuelve tipo si no hubo
+             * error, y siempre con elem: en el caso no vacío elem es el tipo
+             * del primer elemento, y en `val v: [int] = []` es el clon del
+             * hint, que viene de parse_type y siempre trae elem. */
+            printf("  ");
+            print_addr(&in->dst);
+            printf(" = alloc %s[%lld]\n",
+                   kel_type_name(in->dst.type->elem), in->op1.i);
+            break;
+        case IR_INDEX_LOAD:
+            printf("  ");
+            print_addr(&in->dst);
+            printf(" = ");
+            print_addr(&in->op1);
+            printf("[");
+            print_addr(&in->op2);
+            printf("]\n");
+            break;
+        case IR_INDEX_STORE:
+            /* dst se imprime como fuente: `op1[op2] = dst` (ver ir.h). */
+            printf("  ");
+            print_addr(&in->op1);
+            printf("[");
+            print_addr(&in->op2);
+            printf("] = ");
+            print_addr(&in->dst);
             printf("\n");
             break;
         case IR_READ:

@@ -1,0 +1,5 @@
+fn main() {
+  var nums: [int] = [10, 20, 30]
+  nums[0] = 99
+  val x = nums[1]
+}
