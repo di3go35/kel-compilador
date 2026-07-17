@@ -5,6 +5,7 @@
 #include "symtab.h"
 #include "ir.h"
 #include "emit_c.h"
+#include "optimize.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +23,7 @@ static void usage(FILE* out, const char* prog) {
         "  --ast       Muestra el AST con tipos inferidos (Etapa 2 + 3)\n"
         "  --symbols   Muestra la tabla de símbolos (Etapa 3)\n"
         "  --ir        Muestra el código intermedio TAC (Etapa 4)\n"
+        "  --opt       Muestra el TAC optimizado (Etapa 5)\n"
         "  --emit-c    Imprime el C generado (Etapa 6)\n"
         "  -o <exe>    Compila con gcc y produce un ejecutable (Etapa 6)\n"
         "  --sem       Solo reporta resultado del análisis semántico\n"
@@ -59,7 +61,7 @@ int main(int argc, char** argv) {
     const char* path = NULL;
     const char* out_exe = NULL;
     int show_tokens = 0, show_ast = 0, show_sem = 0, show_symbols = 0, show_ir = 0;
-    int emit_c_flag = 0;
+    int emit_c_flag = 0, opt_flag = 0;
 
     for (int i = 1; i < argc; i++) {
         if      (strcmp(argv[i], "--tokens") == 0) show_tokens = 1;
@@ -67,6 +69,7 @@ int main(int argc, char** argv) {
         else if (strcmp(argv[i], "--sem") == 0)    show_sem = 1;
         else if (strcmp(argv[i], "--symbols") == 0) show_symbols = 1;
         else if (strcmp(argv[i], "--ir") == 0)      show_ir = 1;
+        else if (strcmp(argv[i], "--opt") == 0)     opt_flag = 1;
         else if (strcmp(argv[i], "--emit-c") == 0)  emit_c_flag = 1;
         else if (strcmp(argv[i], "-o") == 0) {
             if (i + 1 >= argc) { fprintf(stderr, "kelc: -o requiere un nombre de salida\n"); return 1; }
@@ -115,14 +118,16 @@ int main(int argc, char** argv) {
                 rc = 1;
             } else if (show_sem) {
                 printf("Semántico OK\n");
-            } else if (!show_tokens && !show_ast && !show_symbols && !show_ir && !emit_c_flag && !out_exe) {
+            } else if (!show_tokens && !show_ast && !show_symbols && !show_ir && !emit_c_flag && !out_exe && !opt_flag) {
                 printf("Lexer OK — %zu tokens\nParser OK\nSemántico OK\n", tokens.count);
             }
             /* El IR se genera ANTES de kel_free_ast: IRFunction.params,
              * ret_type y los Addr.type apuntan al AST sin poseerlo. */
-            if (!sr.had_error && (show_ir || emit_c_flag || out_exe)) {
+            if (!sr.had_error && (show_ir || opt_flag || emit_c_flag || out_exe)) {
                 IRProgram ir = kel_gen(pr.root);
-                if (show_ir)     kel_ir_print(&ir);
+                if (opt_flag) kel_optimize(&ir);
+                /* --opt imprime el TAC optimizado, salvo que se pida C o exe */
+                if (show_ir || (opt_flag && !emit_c_flag && !out_exe)) kel_ir_print(&ir);
                 if (emit_c_flag) kel_emit_c(&ir, stdout);
                 if (out_exe)     rc = compile_to_exe(&ir, out_exe);
                 kel_ir_free(&ir);

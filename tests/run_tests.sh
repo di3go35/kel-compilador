@@ -167,6 +167,38 @@ done
 rm -rf "$READ_DIR"
 
 echo
+echo "== equivalencia del optimizador (--opt no altera la salida) =="
+EQ_DIR="$(mktemp -d)"
+for f in tests/run/*.kel; do
+    [ -e "$f" ] || continue
+    base="$(basename "${f%.kel}")"
+    c0="$EQ_DIR/$base.0.c"; e0="$EQ_DIR/$base.0.exe"
+    c1="$EQ_DIR/$base.1.c"; e1="$EQ_DIR/$base.1.exe"
+    if ! "$KELC" --emit-c "$f" > "$c0" 2>/dev/null \
+      || ! "$KELC" --opt --emit-c "$f" > "$c1" 2>/dev/null; then
+        fail=$((fail+1)); fails+=("$f (emisión falló)")
+        printf "  FAIL %s (emisión falló)\n" "$f"; continue
+    fi
+    # El C optimizado también debe compilar limpio con -Werror: si el
+    # optimizador deja una etiqueta sin salto, aquí revienta con -Wunused-label.
+    if ! gcc -Wall -Wextra -Werror -o "$e0" "$c0" 2>/dev/null \
+      || ! gcc -Wall -Wextra -Werror -o "$e1" "$c1" 2> "$EQ_DIR/$base.gcc.log"; then
+        fail=$((fail+1)); fails+=("$f (el C optimizado no compila)")
+        printf "  FAIL %s (gcc rechazó el C optimizado):\n" "$f"
+        sed 's/^/    /' "$EQ_DIR/$base.gcc.log"; continue
+    fi
+    o0=$("$e0" < /dev/null | tr -d '\r'); o1=$("$e1" < /dev/null | tr -d '\r')
+    if [ "$o0" = "$o1" ]; then
+        pass=$((pass+1)); printf "  ok   %s\n" "$f"
+    else
+        fail=$((fail+1)); fails+=("$f (--opt cambió la salida)")
+        printf "  FAIL %s (--opt cambió la salida)\n    --- sin --opt ---\n%s\n    --- con --opt ---\n%s\n" \
+               "$f" "$o0" "$o1"
+    fi
+done
+rm -rf "$EQ_DIR"
+
+echo
 echo "Resultado: $pass pasaron, $fail fallaron."
 if [ "$fail" -ne 0 ]; then
     echo "Fallos:"
