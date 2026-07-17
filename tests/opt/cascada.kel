@@ -1,0 +1,6 @@
+fn main() {
+  val a = 2 + 3
+  val b = a * 10
+  val c = b - 50
+  println(c)
+}

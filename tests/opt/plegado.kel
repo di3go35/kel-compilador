@@ -1,0 +1,4 @@
+fn main() {
+  val a = 10 * 10 + 5
+  println(a)
+}

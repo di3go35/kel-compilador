@@ -1,0 +1,8 @@
+fn ident(x: int) -> int {
+  val y = x
+  return y
+}
+
+fn main() {
+  println(ident(7))
+}
