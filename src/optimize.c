@@ -160,9 +160,12 @@ static int rewrite_operand(const Env* e, Addr* op) {
 static void update_env(Env* e, const Instr* in) {
     const Addr* w = written_loc(in);
     if (w) env_invalidate(e, w);
-    /* Solo se registran copias de CONSTANTE en este task (Task 3 añade copias
-     * de ubicación). Un plegado ya dejó la instrucción como IR_COPY de const. */
-    if (in->op == IR_COPY && is_const(&in->op1))
+    /* Registra cualquier copia: de constante (propagación de constantes) o de
+     * otra ubicación (propagación de copias). Un plegado ya dejó la instrucción
+     * como IR_COPY. No se registran IR_INDEX_LOAD/READ/CALL: valor desconocido
+     * (y los loads de arreglo, mutables por una llamada, no deben propagarse). */
+    if (in->op == IR_COPY && (is_const(&in->op1)
+            || in->op1.kind == ADDR_VAR || in->op1.kind == ADDR_TEMP))
         env_set(e, in->dst, in->op1);
 }
 
