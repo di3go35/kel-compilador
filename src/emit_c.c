@@ -205,8 +205,14 @@ static int is_string(const Addr* a) {
     return a->type && a->type->kind == KT_STRING;
 }
 
+/* Convenio de gen_call (ir.c): `call f, n` consume los n param más
+ * recientes. Una pila de Addr lo reconstruye; las llamadas anidadas
+ * funcionan solas porque la interna vacía su parte antes de que la
+ * externa apile. 256 sobra: nadie escribe una llamada de 256 argumentos. */
+static Addr g_params[256];
+static size_t g_nparams = 0;
+
 static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
-    (void)f;
     switch (in->op) {
         case IR_COPY:
             fprintf(out, "    ");
@@ -267,6 +273,46 @@ static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
             fprintf(out, "    if (!(");
             c_addr(out, &in->op1); fprintf(out, ")) goto ");
             c_addr(out, &in->op2); fprintf(out, ";\n");
+            break;
+        case IR_PARAM:
+            if (g_nparams < 256) g_params[g_nparams++] = in->op1;
+            break;
+        case IR_CALL: {
+            size_t n = (size_t)in->op2.i;
+            fprintf(out, "    ");
+            if (in->dst.kind != ADDR_NONE) {
+                c_addr(out, &in->dst);
+                fprintf(out, " = ");
+            }
+            c_fn_name(out, in->sym);
+            fprintf(out, "(");
+            for (size_t k = 0; k < n; k++) {
+                if (k) fprintf(out, ", ");
+                c_addr(out, &g_params[g_nparams - n + k]);
+            }
+            g_nparams -= n;
+            fprintf(out, ");\n");
+            break;
+        }
+        case IR_RETURN:
+            if (in->op1.kind == ADDR_NONE) {
+                /* main es void en Kel pero int main(void) en C */
+                fprintf(out, strcmp(f->name, "main") == 0
+                             ? "    return 0;\n" : "    return;\n");
+            } else {
+                fprintf(out, "    return ");
+                c_addr(out, &in->op1);
+                fprintf(out, ";\n");
+            }
+            break;
+        case IR_READ:
+            fprintf(out, "    ");
+            c_addr(out, &in->dst);
+            switch (in->dst.type->kind) {   /* nunca NULL: ret_type real, ver ir.h */
+                case KT_FLOAT:  fprintf(out, " = kel_read_float();\n"); break;
+                case KT_STRING: fprintf(out, " = kel_read_line();\n"); break;
+                default:        fprintf(out, " = kel_read_int();\n"); break;
+            }
             break;
         default:
             /* Andamio: si esto llega al .c, gcc no compila y el e2e falla
