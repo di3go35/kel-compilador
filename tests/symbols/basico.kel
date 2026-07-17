@@ -1,0 +1,11 @@
+fn suma(a: int, b: int) -> int {
+  return a + b
+}
+
+fn main() {
+  val nombre = "Diego"
+  var puntaje: int = 0
+  val pi: float = 3.1415
+  puntaje = suma(puntaje, 1)
+  println(nombre)
+}

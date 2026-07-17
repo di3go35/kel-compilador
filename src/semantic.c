@@ -1,5 +1,6 @@
 #include "semantic.h"
 #include "diag.h"
+#include "symtab.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,7 @@ typedef struct Symbol {
 typedef struct Scope {
     Symbol* head;
     struct Scope* parent;
+    const char* label;   /* "main", "for", ... o NULL en bloques anónimos */
 } Scope;
 
 typedef struct FnSig {
@@ -33,6 +35,7 @@ typedef struct {
     FnSig* fns;
     KelType* current_ret;  /* ret_type de la función que se está analizando */
     int errors;
+    int frame_offset;      /* cursor del marco; se reinicia por función */
 } Sem;
 
 /* ---------- Tipos helpers ---------- */
@@ -66,10 +69,30 @@ static void err(Sem* S, const Node* n, const char* fmt, ...) {
 
 /* ---------- Scopes ---------- */
 
-static void scope_push(Sem* S) {
+static void scope_push(Sem* S, const char* label) {
     Scope* s = (Scope*)calloc(1, sizeof(Scope));
     s->parent = S->scope;
+    s->label = label;
     S->scope = s;
+}
+
+/* Construye el ámbito punteado ("main.for") caminando hasta la raíz y
+ * saltando los bloques anónimos. Escribe en `out` y lo devuelve. */
+static const char* scope_path(Sem* S, char* out, size_t cap) {
+    const char* parts[16];
+    int n = 0;
+    for (Scope* s = S->scope; s && n < 16; s = s->parent)
+        if (s->label) parts[n++] = s->label;
+    out[0] = '\0';
+    size_t len = 0;
+    for (int i = n - 1; i >= 0; i--) {
+        size_t need = strlen(parts[i]) + (len ? 1 : 0);
+        if (len + need + 1 > cap) break;
+        if (len) out[len++] = '.';
+        strcpy(out + len, parts[i]);
+        len += strlen(parts[i]);
+    }
+    return out;
 }
 
 static void scope_pop(Sem* S) {
@@ -100,6 +123,21 @@ static Symbol* lookup(Sem* S, const char* name) {
     return NULL;
 }
 
+/* Devuelve el literal del inicializador como texto, o NULL si no es una
+ * constante conocida en compilación. El llamante libera. */
+static char* const_text(const Node* init) {
+    if (!init) return NULL;
+    char buf[128];
+    switch (init->kind) {
+        case N_INT_LIT:   snprintf(buf, sizeof(buf), "%lld", init->int_val); break;
+        case N_FLOAT_LIT: snprintf(buf, sizeof(buf), "%g", init->float_val); break;
+        case N_BOOL_LIT:  snprintf(buf, sizeof(buf), "%s", init->bool_val ? "true" : "false"); break;
+        case N_STR_LIT:   snprintf(buf, sizeof(buf), "\"%s\"", init->str_val); break;
+        default: return NULL;
+    }
+    return strdup(buf);
+}
+
 static int declare(Sem* S, const char* name, KelType* type, int mutable, const Node* where) {
     if (scope_find_local(S->scope, name)) {
         err(S, where, "'%s' ya está declarado en este ámbito", name);
@@ -111,6 +149,20 @@ static int declare(Sem* S, const char* name, KelType* type, int mutable, const N
     sy->is_mutable = mutable;
     sy->next = S->scope->head;
     S->scope->head = sy;
+
+    /* Grabar en el log para --symbols. Alineamos el cursor del marco al
+     * tamaño del tipo antes de asignar el desplazamiento. */
+    int align = kel_type_align(type);
+    S->frame_offset = (S->frame_offset + align - 1) / align * align;
+    int off = S->frame_offset;
+    S->frame_offset += kel_type_size(type);
+
+    char path[128];
+    scope_path(S, path, sizeof(path));
+    char* val = (where && where->kind == N_VAR_DECL) ? const_text(where->decl_init) : NULL;
+    kel_symlog_add(path, name, type, mutable, off, where ? where->line : 0, val);
+    free(val);
+
     return 1;
 }
 
@@ -340,7 +392,7 @@ static KelType* check_expr(Sem* S, Node* n) { return check_expr_h(S, n, NULL); }
 static void check_stmt(Sem* S, Node* n);
 
 static void check_block(Sem* S, Node* n) {
-    scope_push(S);
+    scope_push(S, NULL);
     for (size_t i = 0; i < n->item_count; i++) check_stmt(S, n->items[i]);
     scope_pop(S);
 }
@@ -421,7 +473,7 @@ static void check_for(Sem* S, Node* n) {
         err(S, n->range_end, "fin de rango debe ser int, encontrado %s", kel_type_name(b));
     kel_type_free(a); kel_type_free(b);
 
-    scope_push(S);
+    scope_push(S, "for");
     KelType* it = mk(KT_INT);
     declare(S, n->loop_var, it, 0, n);
     kel_type_free(it);
@@ -489,7 +541,8 @@ static void check_stmt(Sem* S, Node* n) {
 
 static void check_function(Sem* S, Node* fn) {
     S->current_ret = fn->ret_type;
-    scope_push(S);
+    S->frame_offset = 0;
+    scope_push(S, fn->fn_name);
     for (size_t i = 0; i < fn->param_count; i++)
         declare(S, fn->params[i].name, fn->params[i].type, 1, fn);
     /* body es N_BLOCK pero ya estamos en un scope; recorrer directo */

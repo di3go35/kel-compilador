@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "semantic.h"
 #include "diag.h"
+#include "symtab.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,7 @@ static void usage(FILE* out, const char* prog) {
         "Flags:\n"
         "  --tokens    Muestra el stream de tokens (Etapa 1)\n"
         "  --ast       Muestra el AST con tipos inferidos (Etapa 2 + 3)\n"
+        "  --symbols   Muestra la tabla de símbolos (Etapa 3)\n"
         "  --sem       Solo reporta resultado del análisis semántico\n"
         "  -h, --help  Muestra esta ayuda\n"
         "\n"
@@ -32,12 +34,13 @@ static void usage(FILE* out, const char* prog) {
 
 int main(int argc, char** argv) {
     const char* path = NULL;
-    int show_tokens = 0, show_ast = 0, show_sem = 0;
+    int show_tokens = 0, show_ast = 0, show_sem = 0, show_symbols = 0;
 
     for (int i = 1; i < argc; i++) {
         if      (strcmp(argv[i], "--tokens") == 0) show_tokens = 1;
         else if (strcmp(argv[i], "--ast") == 0)    show_ast = 1;
         else if (strcmp(argv[i], "--sem") == 0)    show_sem = 1;
+        else if (strcmp(argv[i], "--symbols") == 0) show_symbols = 1;
         else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             usage(stdout, argv[0]);
             return 0;
@@ -75,18 +78,20 @@ int main(int argc, char** argv) {
         } else {
             SemResult sr = kel_analyze(pr.root);
             if (show_ast) kel_print_ast(pr.root);  /* con tipos inferidos */
+            if (show_symbols) kel_symlog_print();
             if (sr.had_error) {
                 fprintf(stderr, "Semántico: %d error(es)\n", sr.errors);
                 rc = 1;
             } else if (show_sem) {
                 printf("Semántico OK\n");
-            } else if (!show_tokens && !show_ast) {
+            } else if (!show_tokens && !show_ast && !show_symbols) {
                 printf("Lexer OK — %zu tokens\nParser OK\nSemántico OK\n", tokens.count);
             }
         }
         kel_free_ast(pr.root);
     }
 
+    kel_symlog_free();
     kel_free_tokens(&tokens);
     free(src);
     return rc;
