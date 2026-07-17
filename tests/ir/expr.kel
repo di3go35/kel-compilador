@@ -1,0 +1,6 @@
+fn main() {
+  val a = 2 + 3 * 4
+  var b = a - 1
+  b = -b
+  val s = "x" + "y"
+}
