@@ -13,7 +13,7 @@
  * Los operandos son "Addr": variables, temporales (t1, t2, ...),
  * constantes o etiquetas.
  *
- * Formato de impresión por instrucción (flag `--ir` futuro):
+ * Formato de impresión por instrucción (flag `--ir`):
  *
  *     t1 = a + b              ; IR_BINOP
  *     t2 = -t1                ; IR_UNOP
@@ -37,8 +37,14 @@
  *   - IR_LABEL solo lleva etiquetas numéricas L1, L2..., en dst (ADDR_LABEL).
  *   - Temporales son t1, t2, ... numerados por función.
  *   - Etiquetas: L1, L2, ... únicas por función.
- *   - Tipos: cada Addr lleva un KelType para facilitar la Etapa 6
- *     (emitir C requiere saber si un `+` es aritmético o concatenación).
+ *   - Tipos: un Addr que representa un *valor* lleva su KelType, porque la
+ *     Etapa 6 lo necesita (emitir C requiere saber si un `+` es aritmético o
+ *     concatenación). Pero `type` NO siempre está: es NULL en ADDR_NONE, en
+ *     ADDR_LABEL, y en las constantes que son pura maquinaria de la
+ *     instrucción y cuyo tipo ya implica el opcode — el nº de argumentos de
+ *     IR_CALL, el tamaño de IR_ARRAY_NEW, el índice literal de un
+ *     IR_INDEX_STORE. **La Etapa 6 debe comprobar NULL antes de mirar
+ *     `Addr.type`.** Ver también el hueco conocido del `for` más abajo.
  *
  * Esta fase aprovecha `Node.inferred_type` anotado en semántico.
  * ============================================================ */
@@ -113,6 +119,14 @@ typedef struct {
  * apuntan al AST sin poseerlo, y los ADDR_VAR / ADDR_CONST_STR apuntan a
  * cadenas del AST. El AST debe seguir vivo mientras se use el IRProgram:
  * llama a kel_free_ast() DESPUÉS de kel_ir_free(), nunca antes.
+ *
+ * HUECO CONOCIDO — el temporal de la condición del `for`: `for i in a..b` se
+ * desazucara a una comparación `i < b` que **no existe en el AST**, así que no
+ * hay `inferred_type` del que copiar y su Addr queda con `type == NULL`. Es un
+ * bool. La Etapa 6 puede asumirlo por el contexto (es el op1 de un
+ * IR_IF_FALSE_GOTO). Si algún día no bastara, la salida limpia es que ir.c
+ * construya su propio KelType — y entonces IRFunction pasaría a poseer
+ * KelTypes y kel_ir_free tendría que liberarlos, que hoy no hace.
  *
  * API de la Etapa 5 (optimize.c) — Plan 4.
  * API de la Etapa 6 (emit_c.c)   — Plan 3.
