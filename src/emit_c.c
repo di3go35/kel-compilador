@@ -144,7 +144,12 @@ static void c_string_lit(FILE* out, const char* s) {
 static void c_addr(FILE* out, const Addr* a) {
     switch (a->kind) {
         case ADDR_NONE:        break;
-        case ADDR_CONST_INT:   fprintf(out, "%lld", a->i); break;
+        /* Sufijo LL: un literal entero de C es `int`, pero los enteros de Kel
+         * son `long long`. Sin el sufijo, tras plegar una constante a un
+         * operando de printf("%lld") o a un return, gcc -Werror=format / la
+         * conversión estrecha lo rechaza. El plegado del Plan 4 es lo que
+         * lleva constantes a esas posiciones (antes solo llegaban temporales). */
+        case ADDR_CONST_INT:   fprintf(out, "%lldLL", a->i); break;
         case ADDR_CONST_FLOAT: c_float(out, a->f); break;
         case ADDR_CONST_BOOL:  fprintf(out, "%d", a->b); break;
         case ADDR_CONST_STR:   c_string_lit(out, a->s); break;
@@ -178,7 +183,11 @@ static void emit_declarations(FILE* out, const IRFunction* f) {
         seen[id] = 1;
         fprintf(out, "    ");
         c_type(out, in->dst.type);   /* NULL -> long long (bool del for) */
-        fprintf(out, " t%lld = 0;\n", id);
+        /* __attribute__((unused)): tras la propagación del Plan 4 un temporal
+         * puede quedar escrito pero sin lecturas antes de que el DCE lo borre
+         * (y en estados de optimización parcial). Sin la marca,
+         * -Wunused-but-set-variable con -Werror tumbaría el .c optimizado. */
+        fprintf(out, " t%lld __attribute__((unused)) = 0;\n", id);
     }
     free(seen);
     /* variables de usuario (dst ADDR_VAR de COPY/READ), sin duplicar */

@@ -199,6 +199,33 @@ done
 rm -rf "$EQ_DIR"
 
 echo
+echo "== tests/opt (cada pase dispara sobre --opt) =="
+for f in tests/opt/*.kel; do
+    [ -e "$f" ] || continue
+    base="${f%.kel}"
+    got=$("$KELC" --opt "$f" 2>/dev/null | tr -d '\r')
+    okc=1; why=""
+    if [ -e "$base.present" ]; then
+        while IFS= read -r pat; do
+            [ -z "$pat" ] && continue
+            case "$got" in *"$pat"*) : ;; *) okc=0; why="falta: $pat" ;; esac
+        done < "$base.present"
+    fi
+    if [ -e "$base.absent" ]; then
+        while IFS= read -r pat; do
+            [ -z "$pat" ] && continue
+            case "$got" in *"$pat"*) okc=0; why="sobra: $pat" ;; esac
+        done < "$base.absent"
+    fi
+    if [ "$okc" = 1 ]; then
+        pass=$((pass+1)); printf "  ok   %s\n" "$f"
+    else
+        fail=$((fail+1)); fails+=("$f ($why)")
+        printf "  FAIL %s (%s)\n    --- --opt ---\n%s\n" "$f" "$why" "$got"
+    fi
+done
+
+echo
 echo "Resultado: $pass pasaron, $fail fallaron."
 if [ "$fail" -ne 0 ]; then
     echo "Fallos:"
