@@ -1,0 +1,70 @@
+// Cubre todos los tokens y construcciones válidas
+/* bloque de
+   comentario */
+
+fn mul(a: int, b: int) -> int { return a * b }
+fn div(a: int, b: int) -> int { return a / b }
+fn neg(a: int) -> int { return -a }
+
+fn cadena(s: string) -> string {
+  return s + "!"
+}
+
+fn main() {
+  // Todos los tipos
+  val i: int = 42
+  val f: float = 3.14
+  val b: bool = true
+  val s: string = "hola"
+
+  // Arrays de cada tipo
+  val ai: [int] = [1, 2, 3]
+  val af: [float] = [1.0, 2.0]
+  val ab: [bool] = [true, false]
+  val as: [string] = ["a", "b"]
+
+  // Operadores aritméticos
+  var r = i + 1 - 2 * 3 / 1
+
+  // Comparaciones
+  val c1 = i == 42
+  val c2 = i != 0
+  val c3 = i < 100
+  val c4 = i > 0
+  val c5 = i <= 42
+  val c6 = i >= 42
+
+  // Lógicos
+  val l1 = c1 && c2
+  val l2 = c3 || c4
+  val l3 = !c1
+
+  // Asignación a var
+  r = r + 1
+
+  // Asignación a elemento de array mutable
+  var arr: [int] = [10, 20, 30]
+  arr[0] = 99
+
+  // for + while
+  for j in 0..5 {
+    r = r + j
+  }
+  var k = 0
+  while k < 3 { k = k + 1 }
+
+  // if / else if / else
+  if i > 100 {
+    println("grande")
+  } else if i > 10 {
+    println("mediano")
+  } else {
+    println("chico")
+  }
+
+  // Llamadas y composición
+  val m = mul(neg(2), 3)
+  val d = div(10, 2)
+  val t = cadena(s)
+  println(t)
+}

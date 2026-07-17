@@ -195,9 +195,14 @@ static void emit_declarations(FILE* out, const IRFunction* f) {
             if (strcmp(done[k], in->dst.s) == 0) { dup = 1; break; }
         if (dup) continue;
         if (n_done < 256) done[n_done++] = in->dst.s;
+        /* __attribute__((unused)): una variable de Kel puede calcularse y no
+         * usarse nunca (p.ej. `val d = div(10, 2)` sin imprimir d). Es código
+         * muerto legal en el fuente, no un defecto del codegen; sin la marca,
+         * -Wunused-but-set-variable con -Werror tumbaría el .c generado. Lo
+         * limpiará el optimizador del Plan 4; hoy la marca lo hace compilable. */
         fprintf(out, "    ");
         c_type(out, in->dst.type);
-        fprintf(out, " k_%s = 0;\n", in->dst.s);
+        fprintf(out, " k_%s __attribute__((unused)) = 0;\n", in->dst.s);
     }
 }
 
@@ -313,6 +318,23 @@ static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
                 case KT_STRING: fprintf(out, " = kel_read_line();\n"); break;
                 default:        fprintf(out, " = kel_read_int();\n"); break;
             }
+            break;
+        case IR_ARRAY_NEW:
+            /* Nada: la declaración del temporal ya reservó el arreglo
+             * nativo (emit_declarations). */
+            break;
+        case IR_INDEX_LOAD:
+            fprintf(out, "    ");
+            c_addr(out, &in->dst); fprintf(out, " = ");
+            c_addr(out, &in->op1); fprintf(out, "[");
+            c_addr(out, &in->op2); fprintf(out, "];\n");
+            break;
+        case IR_INDEX_STORE:
+            /* dst es la FUENTE (ver ir.h) */
+            fprintf(out, "    ");
+            c_addr(out, &in->op1); fprintf(out, "[");
+            c_addr(out, &in->op2); fprintf(out, "] = ");
+            c_addr(out, &in->dst); fprintf(out, ";\n");
             break;
         default:
             /* Andamio: si esto llega al .c, gcc no compila y el e2e falla
