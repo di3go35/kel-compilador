@@ -37,6 +37,19 @@
  *   - IR_LABEL solo lleva etiquetas numéricas L1, L2..., en dst (ADDR_LABEL).
  *   - Temporales son t1, t2, ... numerados por función.
  *   - Etiquetas: L1, L2, ... únicas por función.
+ *   - Los números son IDENTIDAD, no orden de aparición. En un cortocircuito
+ *     anidado el temporal de fuera se reserva antes que el de dentro pero se
+ *     escribe después, así que `(a || b) && c` imprime t4 antes que t3:
+ *
+ *         t4 = a          ; el || de dentro
+ *         if t4 goto L3
+ *         t4 = b
+ *       L3:
+ *         t3 = t4         ; el && de fuera, reservado primero
+ *
+ *     No es un bug: es lo que pasa al reservar el temporal del resultado antes
+ *     de generar el lado izquierdo. La Etapa 5 debe tratarlos como ids únicos,
+ *     nunca asumir que t_n se define antes que t_n+1.
  *   - Tipos: un Addr que representa un *valor* lleva su KelType, porque la
  *     Etapa 6 lo necesita (emitir C requiere saber si un `+` es aritmético o
  *     concatenación). Pero `type` NO siempre está: es NULL en ADDR_NONE, en
