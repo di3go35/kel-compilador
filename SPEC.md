@@ -171,10 +171,12 @@ val s = read_line()      // lee una línea completa, incluidos espacios
 #### ¿Por qué `println` sí es palabra reservada y `read_*` no?
 
 La diferencia está en el **léxico, no en la gramática**. `println` tiene token
-propio (`TOKEN_PRINTLN`), pero no tiene regla propia: el parser lo acepta en la
-misma rama que a un identificador cualquiera y construye un `N_IDENT`, así que
-`println(x)` llega al semántico como un `N_CALL` normal — igual que
-`read_int()`.
+propio (`TOKEN_PRINTLN`), pero **no tiene producción propia**: aparece en la
+regla de `primary` como una alternativa más junto a `IDENT`
+(`primary ::= IDENT | PRINTLN | ...`), el parser lo acepta en la misma rama que
+a un identificador cualquiera y construye un `N_IDENT`. De ahí en adelante el
+camino es idéntico al de cualquier llamada: `println(x)` llega al semántico como
+un `N_CALL` normal, igual que `read_int()`.
 
 Que `println(x)` no sirva dentro de una expresión no lo impone la gramática,
 sino el **sistema de tipos**: `check_call` le da tipo `void`. Por eso
@@ -187,11 +189,9 @@ fn f() {}
 val a: int = f()      // inicializador de 'a': esperado int, encontrado void
 ```
 
-Gramaticalmente, `println` no recibe ningún trato especial.
-
 Lo único que compra `TOKEN_PRINTLN` es **reservar la palabra**: el lexer nunca
 la entrega como identificador, de modo que `var println: int = 5` no compila
-(*"se esperaba nombre de variable"*).
+(*"se esperaba nombre de variable (token 'println')"*).
 
 Ese es el intercambio. Reservar cuesta un token y a cambio protege el nombre.
 No reservar deja el lexer intacto, pero el nombre queda libre: `var read_int:
