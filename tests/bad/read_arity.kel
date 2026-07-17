@@ -1,0 +1,4 @@
+fn main() {
+  val a = read_int(5)
+  println(a)
+}

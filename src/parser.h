@@ -108,5 +108,7 @@ void kel_print_ast(const Node* n);
 
 /* util para otras fases */
 const char* kel_type_name(const KelType* t);
+KelType* kel_type_clone(const KelType* t);
+void     kel_type_free(KelType* t);
 
 #endif

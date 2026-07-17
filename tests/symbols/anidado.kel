@@ -1,0 +1,8 @@
+fn main() {
+  var total = 0
+  for i in 0..3 {
+    val doble = i * 2
+    total = total + doble
+  }
+  println(total)
+}

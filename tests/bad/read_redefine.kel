@@ -1,0 +1,7 @@
+fn read_int() -> int {
+  return 0
+}
+
+fn main() {
+  println(read_int())
+}

@@ -136,6 +136,9 @@ nums[0]                       // acceso por índice (base 0)
 ```
 
 - Tamaño fijo en v1 (no hay push/pop)
+- **Se pasan por referencia** a las funciones: si una función muta un
+  elemento del arreglo que recibe, el cambio es visible para quien la llamó.
+  Es coherente con C, que es el target de la Etapa 6.
 - Literal vacío (`[]`) válido solo cuando hay tipo esperado del contexto:
   `val v: [int] = []`
 
@@ -148,6 +151,36 @@ println("Valor: " + nombre)   // concatenación con +
 
 - Solo `println` (incluye salto de línea automático)
 - No hay `print` sin salto de línea en v1
+
+### Entrada estándar
+
+```kel
+val a = read_int()       // lee una línea y la convierte a int
+val f = read_float()     // lee una línea y la convierte a float
+val s = read_line()      // lee una línea completa, incluidos espacios
+```
+
+- Los tres leen una **línea completa** de la entrada estándar.
+- `read_line` devuelve la línea sin el salto de línea final.
+- **No son palabras reservadas.** Son funciones built-in registradas en la
+  tabla de símbolos, no tokens: para el lexer `read_int` es un identificador
+  cualquiera, y `read_int()` parsea como cualquier otra llamada. Por eso
+  añadir un built-in no toca el autómata léxico ni la gramática.
+- Redefinirlas es un error: `fn read_int() -> int { ... }` no compila.
+
+#### ¿Por qué `println` sí es palabra clave y `read_*` no?
+
+Porque son cosas gramaticalmente distintas. `println(x)` es una **sentencia**:
+no produce valor y no puede aparecer dentro de una expresión, así que necesita
+su propia regla en la gramática y su token (`TOKEN_PRINTLN`).
+
+`read_int()` es una **expresión**: produce un valor y tiene que poder aparecer
+donde quepa cualquier otro (`val a = read_int()`, `read_int() + 1`). Eso es
+exactamente lo que ya hace una llamada a función, de modo que no necesita ni
+token ni regla nueva — basta con registrar su firma.
+
+La consecuencia práctica: añadir un built-in de entrada no toca el lexer ni el
+parser, solo la tabla de funciones del análisis semántico.
 
 ### Operadores
 
@@ -239,10 +272,12 @@ Los comentarios son descartados por el lexer, nunca llegan al parser.
 | Cadena `"hola"` | `TOKEN_STR_LIT`   | Entre comillas dobles       |
 | Identificador   | `TOKEN_IDENT`     | `[a-zA-Z_][a-zA-Z0-9_]*`    |
 | Fin de archivo  | `TOKEN_EOF`       | —                           |
+| Error léxico    | `TOKEN_ERROR`     | Carácter no reconocido      |
 | Comentarios     | *(descartado)*    | No generan token            |
 | Whitespace      | *(descartado)*    | No generan token            |
 
-**Total: 47 tokens**
+**Total: 47 tokens** — 16 palabras clave + 17 operadores + 8 delimitadores +
+6 literales y especiales. Coincide con el enum `TokenType` de `src/lexer.h`.
 
 ### Notas de implementación críticas
 
@@ -279,7 +314,11 @@ src/
   parser.h  / parser.c     — Etapa 2: parser descendente recursivo → AST
   semantic.h/ semantic.c   — Etapa 3: tabla de símbolos + chequeo de tipos
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
-  codegen.h                — esqueleto para Etapa 4 (TAC)
+  ir.h                     — Etapa 4: tipos del código intermedio (TAC)
+  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  optimize.h/ optimize.c   — Etapa 5: optimización local            (pendiente)
+  emit_c.h  / emit_c.c     — Etapa 6: generación de C               (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
   main.c                   — CLI
 tests/
   ok/                      — programas válidos
@@ -295,8 +334,56 @@ Makefile
 ./kelc --tokens programa.kel # debug léxico
 ./kelc --ast programa.kel    # debug sintáctico/semántico
 ./kelc --sem programa.kel    # solo fase semántica
+./kelc --symbols programa.kel # tabla de símbolos
 ./kelc --help                # ayuda
 ```
+
+#### Salida de `--symbols`
+
+`--symbols` vuelca el log de declaraciones registrado durante la fase
+semántica: una fila por cada `val`/`var` declarado, en el orden en que
+el análisis las va viendo. Ejemplo, sobre `tests/symbols/basico.kel`:
+
+```
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+suma             a              int       var       0      1  —
+suma             b              int       var       4      1  —
+main             nombre         string    val       0      6  "Diego"
+main             puntaje        int       var       8      7  0
+main             pi             float     val      16      8  3.1415
+```
+
+Columnas:
+
+- **Ámbito**: ruta de scopes separada por `.`, p. ej. `main.for`. No son
+  niveles de anidamiento numerados — son los nombres de las construcciones
+  que abren scope (`main`, `for`, etc.), concatenados según se entra en
+  ellas.
+- **Identificador**: el nombre declarado.
+- **Tipo**: `int` / `float` / `bool` / `string` / `[T]`.
+- **Mut**: `val` o `var`.
+- **Despl**: desplazamiento dentro del marco de la función. **Es un
+  modelo del marco de pila, no una dirección real.** Se calcula sumando
+  el tamaño del tipo de cada variable (`int`=4, `float`=8, `bool`=1,
+  `string`=8 como puntero, arreglos=8 como referencia), alineando cada
+  desplazamiento al tamaño de su propio tipo, y reiniciando el contador
+  en cada función. La dirección real de cada variable la decide gcc al
+  compilar el C generado en la Etapa 6 — este número es solo la
+  contabilidad que el compilador de Kel lleva internamente, útil para
+  razonar sobre el layout pero no para leer memoria.
+- **Un arreglo cuenta como una referencia de 8 bytes, no como
+  n × tamaño del elemento**: `KelType` no guarda cuántos elementos tiene
+  un arreglo, así que no hay forma de saber ese tamaño en tiempo de
+  compilación. Para los parámetros esto es exacto (los arreglos se pasan
+  por referencia); para variables locales es una simplificación
+  declarada, no un intento de modelar el tamaño real del buffer.
+- **Línea**: línea fuente de la declaración.
+- **Valor**: el texto del literal, si el inicializador es una constante
+  reconocible en tiempo de compilación (`5`, `-5`, `3.5`, `true`,
+  `"texto"`); `—` en cualquier otro caso (inicializador con una
+  expresión, llamada a función, etc.). La tabla de símbolos no ejecuta
+  nada, así que no puede conocer valores que solo existen en tiempo de
+  ejecución.
 
 ---
 
@@ -324,7 +411,7 @@ sintaxis con línea y columna.
 
 #### Etapa 4 — Código intermedio
 
-TAC (Three Address Code). Ver `src/codegen.h` para el formato decidido.
+TAC (Three Address Code). Ver `src/ir.h` para el formato decidido.
 
 #### Etapa 5 — Optimización básica
 
@@ -346,6 +433,7 @@ que luego compila con gcc. Alternativa: bytecode de una VM simple.
 | Variables             | `val`/`var`, tipo postfijo opcional | Estética Kotlin/Rust      |
 | Funciones             | `fn nombre(p: tipo) -> tipo`      | Estética Rust               |
 | Tipos incluidos       | int, float, bool, string, arrays  | Completo pero manejable     |
+| Paso de arreglos      | Por referencia                    | Coherente con el target C   |
 | Condicionales         | Sin paréntesis                    | Estética Go/Rust            |
 | Bucles                | `while` + `for i in 0..n`         | Cubre casos comunes         |
 | Salida                | `println(...)`                    | Simple, estilo Kotlin       |

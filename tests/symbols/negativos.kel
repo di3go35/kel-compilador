@@ -1,0 +1,8 @@
+fn main() {
+  val n = -5
+  val f = -3.5
+  val p = 7
+  println(n)
+  println(f)
+  println(p)
+}

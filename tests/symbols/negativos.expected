@@ -1,0 +1,4 @@
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+main             n              int       val       0      2  -5
+main             f              float     val       8      3  -3.5
+main             p              int       val      16      4  7

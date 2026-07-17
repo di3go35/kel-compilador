@@ -1,0 +1,4 @@
+Ámbito           Identificador  Tipo      Mut   Despl  Línea  Valor
+main             total          int       var       0      2  0
+main.for         i              int       val       4      3  —
+main.for         doble          int       val       8      4  —

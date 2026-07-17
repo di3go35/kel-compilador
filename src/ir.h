@@ -1,5 +1,5 @@
-#ifndef KEL_CODEGEN_H
-#define KEL_CODEGEN_H
+#ifndef KEL_IR_H
+#define KEL_IR_H
 
 /* ============================================================
  * Etapa 4 — Código intermedio (TAC: Three Address Code)
@@ -7,7 +7,7 @@
  * Pipeline previsto:
  *   AST anotado (semantic.c)  →  IR (lista lineal de Instr)
  *                             →  optimización (Etapa 5)
- *                             →  C de salida (Etapa 6)
+ *                             →  C de salida (Etapa 6, emit_c.c)
  *
  * Cada instrucción tiene como máximo 3 direcciones: dst, op1, op2.
  * Los operandos son "Addr": variables, temporales (t1, t2, ...),
@@ -20,6 +20,7 @@
  *     t3 = t1                 ; IR_COPY
  *     t4 = arr[i]             ; IR_INDEX_LOAD
  *     arr[i] = t1             ; IR_INDEX_STORE
+ *     t6 = alloc int[3]       ; IR_ARRAY_NEW  (reserva, no inicializa)
  *     param t1                ; IR_PARAM
  *     t5 = call suma, 2       ; IR_CALL  (nargs = 2)
  *     if t1 goto L2           ; IR_IF_GOTO
@@ -28,6 +29,7 @@
  *   L2:                       ; IR_LABEL
  *     return t5               ; IR_RETURN
  *     println t1              ; IR_PRINTLN
+ *     t7 = read int           ; IR_READ
  *
  * Convenciones:
  *   - Cada función empieza con un IR_LABEL con el nombre de la función.
@@ -65,6 +67,7 @@ typedef enum {
     IR_COPY,              /* dst = op1 */
     IR_BINOP,             /* dst = op1 <op> op2 ; op string "+" ... */
     IR_UNOP,              /* dst = <op> op1 */
+    IR_ARRAY_NEW,         /* dst = alloc <tipo>[op1]  (op1 = nº elementos, const int) */
     IR_INDEX_LOAD,        /* dst = op1[op2] */
     IR_INDEX_STORE,       /* op1[op2] = dst  (dst es la fuente) */
     IR_PARAM,             /* push arg op1 */
@@ -73,7 +76,8 @@ typedef enum {
     IR_IF_GOTO,           /* if op1 goto op2 */
     IR_IF_FALSE_GOTO,     /* ifFalse op1 goto op2 */
     IR_RETURN,            /* return op1 (o void si op1.kind == 0 sentinel) */
-    IR_PRINTLN            /* println op1 */
+    IR_PRINTLN,           /* println op1 */
+    IR_READ               /* dst = read <tipo de dst>  (entrada estándar) */
 } IROp;
 
 typedef struct {
@@ -82,16 +86,38 @@ typedef struct {
     const char* sym;      /* "+", "-", ... para BINOP/UNOP; o nombre de fn */
 } Instr;
 
+/* Una función compilada. Los temporales (t1..t_temps) y las etiquetas
+ * (L1..L_labels) se numeran por función, no globalmente. */
 typedef struct {
-    Instr* data;
-    size_t count, capacity;
+    char*    name;          /* owned */
+    Param*   params;        /* no-owned; apunta al AST */
+    size_t   param_count;
+    KelType* ret_type;      /* no-owned; apunta al AST */
+    Instr*   body;          /* owned */
+    size_t   count, capacity;
+    size_t   n_temps;       /* temporales usados: t1..t_temps */
+    size_t   n_labels;      /* etiquetas usadas: L1..L_labels */
+} IRFunction;
+
+typedef struct {
+    IRFunction* fns;        /* owned */
+    size_t      count, capacity;
 } IRProgram;
 
-/* API a implementar en la Etapa 4.
+/* API de la Etapa 4 (ir.c) — se implementa en el Plan 2.
  *
- *   IRProgram kel_gen(Node* program);   // genera TAC desde el AST
+ *   IRProgram kel_gen(Node* program);        // genera TAC desde el AST anotado
  *   void      kel_ir_print(const IRProgram*);
  *   void      kel_ir_free(IRProgram*);
+ *
+ * API de la Etapa 5 (optimize.c) — Plan 4.
+ * API de la Etapa 6 (emit_c.c)   — Plan 3.
+ *
+ * CUIDADO — tiempo de vida: IRFunction.params y ret_type apuntan al AST sin
+ * poseerlo, así que el AST debe seguir vivo mientras se use el IRProgram.
+ * main.c libera el AST con kel_free_ast() justo tras el semántico; al conectar
+ * kel_gen habrá que mover esa llamada detrás de la generación de IR y de la
+ * emisión de C, o emit_c.c leerá memoria liberada.
  */
 
 #endif
