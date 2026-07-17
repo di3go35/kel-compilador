@@ -152,6 +152,22 @@ println("Valor: " + nombre)   // concatenación con +
 - Solo `println` (incluye salto de línea automático)
 - No hay `print` sin salto de línea en v1
 
+### Entrada estándar
+
+```kel
+val a = read_int()       // lee una línea y la convierte a int
+val f = read_float()     // lee una línea y la convierte a float
+val s = read_line()      // lee una línea completa, incluidos espacios
+```
+
+- Los tres leen una **línea completa** de la entrada estándar.
+- `read_line` devuelve la línea sin el salto de línea final.
+- **No son palabras reservadas.** Son funciones built-in registradas en la
+  tabla de símbolos, no tokens: para el lexer `read_int` es un identificador
+  cualquiera, y `read_int()` parsea como cualquier otra llamada. Por eso
+  añadir un built-in no toca el autómata léxico ni la gramática.
+- Redefinirlas es un error: `fn read_int() -> int { ... }` no compila.
+
 ### Operadores
 
 | Categoría     | Operadores                    |

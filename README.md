@@ -30,13 +30,14 @@ fn main() {
 
 ## Estado
 
-**Unidad I completa** (lexer, parser, análisis semántico). Unidad II (código
-intermedio, optimización, generación final) pendiente.
+**Unidad I completa** (lexer, parser, análisis semántico) con tabla de
+símbolos visible (`--symbols`) y built-ins de entrada. Unidad II (código
+intermedio, optimización, generación final) en curso.
 
 ## Requisitos
 
 - `gcc` (TDM-GCC, MinGW, o el del sistema en Linux/macOS)
-- `make`
+- `make` (en Windows con TDM-GCC: `mingw32-make`)
 - `bash` (para la suite de regresión)
 
 ## Compilar
@@ -53,6 +54,7 @@ Genera el ejecutable `kelc` (o `kelc.exe` en Windows).
 ./kelc programa.kel            # compila y reporta fases
 ./kelc --tokens programa.kel   # muestra el stream de tokens
 ./kelc --ast programa.kel      # muestra el AST con tipos inferidos
+./kelc --symbols programa.kel  # muestra la tabla de símbolos
 ./kelc --sem programa.kel      # solo reporta resultado semántico
 ./kelc --help                  # ayuda
 ```
@@ -68,7 +70,8 @@ Corre la suite de regresión en `tests/ok/` (deben compilar) y `tests/bad/`
 
 Targets extra del Makefile:
 
-- `make asan` — build con AddressSanitizer (requiere Linux/WSL)
+- `make asan` — build con AddressSanitizer. **Requiere Linux/WSL**: TDM-GCC
+  no incluye libasan, así que en Windows falla con `cannot find -lasan`.
 - `make valgrind` — corre los tests bajo valgrind
 - `make clean` — elimina binarios
 
