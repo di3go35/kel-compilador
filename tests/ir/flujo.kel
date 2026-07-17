@@ -11,4 +11,8 @@ fn main() {
   for i in 0..3 {
     t = t + i
   }
+  var n = 3
+  for j in 0..n {
+    n = n + 1
+  }
 }

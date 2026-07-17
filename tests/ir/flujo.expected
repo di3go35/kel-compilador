@@ -24,4 +24,16 @@ L5:
   i = t6
   goto L5
 L6:
+  n = 3
+  j = 0
+  t7 = n
+L7:
+  t8 = j < t7
+  ifFalse t8 goto L8
+  t9 = n + 1
+  n = t9
+  t10 = j + 1
+  j = t10
+  goto L7
+L8:
 }

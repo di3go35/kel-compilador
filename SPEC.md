@@ -125,7 +125,34 @@ for i in 0..10 {
 ```
 
 - `for` itera sobre un rango `inicio..fin` (fin exclusivo)
+- **El `fin` se evalúa una sola vez**, al entrar al bucle — no en cada vuelta.
+  La variable del bucle es inmutable dentro del cuerpo.
 - No hay `break` ni `continue` en v1 (simplificación deliberada)
+
+#### El `for` de Kel no es el `for` de C
+
+En C, `for (i = 0; i < n; i++)` reevalúa `n` en **cada** iteración. El `for` de
+Kel no: el fin se calcula una vez y se congela. Es la semántica de Rust y de
+Kotlin, de donde viene la sintaxis `0..10`.
+
+La diferencia se ve cuando el fin no es constante:
+
+```kel
+var n = 3
+for i in 0..n {
+  n = n + 1      // no afecta al bucle: itera 3 veces y termina
+}
+
+for i in 0..limite() {
+  ...            // limite() se llama UNA vez, no en cada vuelta
+}
+```
+
+Con la regla de C, el primero sería un **bucle infinito** (`n - i` se mantiene
+invariante) y el segundo llamaría a `limite()` una vez por iteración. Se ve en
+el código intermedio: `./kelc --ir` saca el cálculo del fin fuera de la etiqueta
+de condición, y si el fin es una variable la copia a un temporal, porque el
+cuerpo podría reasignarla.
 
 ### Arrays
 

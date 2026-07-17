@@ -417,19 +417,43 @@ static void gen_stmt(IRFunction* f, Node* n) {
             break;
         }
         case N_FOR: {
-            /* for i in a..b  ==>  i = a; Lc: ifFalse i < b goto Lf;
+            /* for i in a..b  ==>  i = a; <fin>; Lc: ifFalse i < fin goto Lf;
              *                     cuerpo; i = i + 1; goto Lc; Lf:
-             * El fin es exclusivo (ver SPEC.md). */
+             * El fin es exclusivo y se evalúa UNA sola vez (ver SPEC.md).
+             *
+             * Que el fin se evalúe una vez es la diferencia entre el `for` de
+             * Kel y el de C. En C, `for (i = 0; i < n; i++)` relee n en cada
+             * vuelta; aquí no, igual que en Rust y Kotlin, de donde viene la
+             * sintaxis `0..3`. Sin esto, `for i in 0..n { n = n + 1 }` sería un
+             * bucle infinito (n - i queda invariante) y `for i in 0..fn()`
+             * llamaría a fn() en cada iteración. */
             Addr start = gen_expr(f, n->range_start);
             KelType* it = n->range_start->inferred_type;
             Addr iv = addr_var(n->loop_var, it);
             emit_copy(f, iv, start);
 
+            /* El fin se genera ANTES de L_cond: así lo que haya que calcular
+             * (una llamada, una indexación) queda fuera del bucle. */
+            Addr end = gen_expr(f, n->range_end);
+
+            /* Pero eso no basta para una variable: gen_expr no emite nada para
+             * ella y `i < n` la releería. Hay que copiar su valor a un temporal.
+             * Las constantes no hace falta: no cambian, y dejarlas inline
+             * mantiene `i < 3` legible. Además el temporal y la comparación
+             * caerían en bloques básicos distintos, así que la propagación de
+             * constantes de la Etapa 5 —que es local al bloque— no podría
+             * deshacerlo. Los temporales ya vienen calculados y nadie los
+             * reescribe: new_temp da un número nuevo cada vez. */
+            if (end.kind == ADDR_VAR) {
+                Addr snap = new_temp(f, end.type);
+                emit_copy(f, snap, end);
+                end = snap;
+            }
+
             long long L_cond = new_label(f);
             long long L_end  = new_label(f);
             emit_label(f, L_cond);
 
-            Addr end = gen_expr(f, n->range_end);
             Addr c = new_temp(f, NULL);   /* bool; el AST no tiene nodo para esta comparación */
             Instr cmp = instr(IR_BINOP);
             cmp.dst = c;
