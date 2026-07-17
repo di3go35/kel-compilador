@@ -80,8 +80,9 @@ src/
   parser.h  / parser.c     — Etapa 2: parser descendente recursivo → AST
   semantic.h/ semantic.c   — Etapa 3: tabla de símbolos + chequeo de tipos
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
-  ir.h      / ir.c         — Etapa 4: código intermedio (TAC)
-  symtab.h  / symtab.c     — log de la tabla de símbolos
+  ir.h                     — Etapa 4: tipos del código intermedio (TAC)
+  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
   main.c                   — CLI
 tests/
   ok/                      — programas válidos

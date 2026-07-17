@@ -279,10 +279,11 @@ src/
   parser.h  / parser.c     — Etapa 2: parser descendente recursivo → AST
   semantic.h/ semantic.c   — Etapa 3: tabla de símbolos + chequeo de tipos
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
-  ir.h      / ir.c         — Etapa 4: generación de código intermedio (TAC)
-  optimize.h/ optimize.c   — Etapa 5: optimización local sobre bloques básicos
-  emit_c.h  / emit_c.c     — Etapa 6: generación de C
-  symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
+  ir.h                     — Etapa 4: tipos del código intermedio (TAC)
+  ir.c                     — Etapa 4: generación de TAC             (pendiente)
+  optimize.h/ optimize.c   — Etapa 5: optimización local            (pendiente)
+  emit_c.h  / emit_c.c     — Etapa 6: generación de C               (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
   main.c                   — CLI
 tests/
   ok/                      — programas válidos
