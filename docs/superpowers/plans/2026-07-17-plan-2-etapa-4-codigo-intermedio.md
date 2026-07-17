@@ -67,7 +67,7 @@
 |---------|-----------------|--------|
 | `src/ir.h` | Tipos del TAC + API | Modificar (`ADDR_NONE`, API, convenciones) |
 | `src/ir.c` | AST anotado → `IRProgram`; impresión; liberación | Crear |
-| `src/semantic.h` / `src/semantic.c` | Exponer `kel_is_builtin` | Modificar |
+| `src/semantic.h` / `src/semantic.c` | Exponer `kel_is_println` y `kel_is_read_builtin` | Modificar |
 | `src/parser.h` / `src/parser.c` | Quitar `N_PRINTLN` muerto | Modificar |
 | `src/main.c` | Flag `--ir`; mover `kel_free_ast` | Modificar |
 | `Makefile` | Añadir `src/ir.c` | Modificar |
@@ -76,9 +76,18 @@
 
 ---
 
-## Task 1: Preparación — código muerto y `kel_is_builtin`
+## Task 1: Preparación — código muerto y los predicados de built-in
 
 Dos obstáculos que hay que quitar antes de escribir `ir.c`.
+
+> **Corregido tras la revisión (commit `c203845`).** Este task pedía exponer
+> `kel_is_builtin`, y era un error del plan: `gen_call` (Task 6) despacha a tres
+> bandas y nunca lo habría llamado, mientras seguía hardcodeando `"println"` —
+> justo la duplicación que la API venía a evitar. Lo expuesto es
+> **`kel_is_println` + `kel_is_read_builtin`**, que sí son los dos predicados que
+> `gen_call` necesita. `check_call` también usa ya `kel_is_println` en vez de su
+> propio `strcmp`. Los snippets de abajo conservan el texto original; la verdad
+> está en `semantic.h`.
 
 **Files:** `src/parser.h`, `src/parser.c`, `src/semantic.h`, `src/semantic.c`
 
@@ -1021,12 +1030,12 @@ En `src/ir.c`, antes de `gen_expr`:
 ```c
 /* println y los read_* llegan como N_CALL: println se parsea como N_IDENT
  * (parser.c:152) y los read_* son identificadores normales. Se distinguen
- * por nombre con kel_is_builtin/kel_is_read_builtin, expuestos por
+ * por nombre con kel_is_println/kel_is_read_builtin, expuestos por
  * semantic.h, para no duplicar aquí la lista de nombres. */
 static Addr gen_call(IRFunction* f, Node* n) {
     const char* name = n->lhs->str_val;
 
-    if (strcmp(name, "println") == 0) {
+    if (kel_is_println(name)) {
         Addr v = gen_expr(f, n->items[0]);
         Instr in = instr(IR_PRINTLN);
         in.op1 = v;
@@ -1133,7 +1142,8 @@ git add src/ir.c tests/ir/llamadas.kel tests/ir/llamadas.expected
 git commit -m "Etapa 4: llamadas, println, read_* y return
 
 println y los read_* llegan como N_CALL y se distinguen por nombre vía
-kel_is_builtin, expuesto en el Task 1, en vez de duplicar los nombres.
+kel_is_println/kel_is_read_builtin, expuestos en el Task 1, en vez de
+duplicar los nombres.
 
 El return sin valor se distingue de 'return 0' gracias a ADDR_NONE."
 ```
@@ -1548,7 +1558,9 @@ Cierra el criterio 8 de la rúbrica."
 - [ ] `./kelc --ir` sobre los 5 programas de `tests/ok/` no imprime nada en stderr
 - [ ] `./kelc --ir tests/ok/full.kel` produce TAC correcto, verificado a mano
 - [ ] `kel_free_ast` se llama DESPUÉS de `kel_ir_free` en `main.c`
-- [ ] `N_PRINTLN` ya no existe; `kel_is_builtin` está expuesto en `semantic.h`
+- [ ] `N_PRINTLN` ya no existe; `kel_is_println` y `kel_is_read_builtin` están
+      expuestos en `semantic.h`. `"println"` aparece dos veces en `src/`, cada
+      una con su trabajo: la tabla de palabras clave del lexer y `kel_is_println`
 - [ ] `ADDR_NONE` existe y `return` se distingue de `return 0`
 - [ ] SPEC.md y README.md no marcan `ir.c` como pendiente
 

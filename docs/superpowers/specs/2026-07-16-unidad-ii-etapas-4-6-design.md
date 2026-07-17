@@ -287,11 +287,18 @@ simplemente repite las tres cadenas literales (`"read_int"`, `"read_float"`,
 `"read_line"`) para reconocerlas, es la misma duplicación de nombres que
 este proyecto ya tuvo que limpiar una vez — dos listas que se pueden
 desincronizar si algún día se agrega un cuarto builtin. La implementación
-del Plan 2 debe exponer una consulta desde `semantic.h` (por ejemplo,
-`int kel_is_builtin(const char* name)`) que `ir.c` pueda llamar, en vez de
-hardcodear los tres nombres de nuevo. No se agrega esa API todavía —nada la
-consume hasta que `ir.c` exista— pero debe entrar como parte del trabajo de
-la Etapa 4, no como deuda a mitad de esa implementación.
+del Plan 2 debe exponer una consulta desde `semantic.h` que `ir.c` pueda
+llamar, en vez de hardcodear los tres nombres de nuevo. No se agrega esa API
+todavía —nada la consume hasta que `ir.c` exista— pero debe entrar como parte
+del trabajo de la Etapa 4, no como deuda a mitad de esa implementación.
+
+Lo implementado (Plan 2, Task 1) son **dos** predicados, no uno:
+`int kel_is_println(const char*)` e `int kel_is_read_builtin(const char*)`.
+Son las dos preguntas que `gen_call` hace de verdad, porque despacha a tres
+bandas: println → `IR_PRINTLN`, read_* → `IR_READ`, resto → `IR_CALL`. Un
+único `kel_is_builtin` que respondiera "es alguno de los cuatro" no le sirve a
+nadie: `gen_call` tendría que volver a preguntar cuál, hardcodeando `"println"`
+y devolviendo la duplicación por la puerta de atrás.
 
 ### 5.2 — Tabla de símbolos visible (`--symbols`)
 
