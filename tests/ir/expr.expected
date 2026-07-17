@@ -8,4 +8,8 @@ fn main() {
   b = t4
   t5 = "x" + "y"
   s = t5
+  f = 1.0
+  t6 = 1.0 / 2.0
+  half = t6
+  t = true
 }

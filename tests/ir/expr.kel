@@ -3,4 +3,7 @@ fn main() {
   var b = a - 1
   b = -b
   val s = "x" + "y"
+  val f = 1.0
+  val half = 1.0 / 2.0
+  val t = true
 }

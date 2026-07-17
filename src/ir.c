@@ -211,13 +211,29 @@ void kel_ir_free(IRProgram* p) {
 
 /* ---------- Impresión ---------- */
 
+/* %g suelta el punto: 1.0 saldría como "1". El --ast puede permitírselo porque
+ * anota el tipo al lado ("Float 1 : float"), pero el TAC no lleva anotación, así
+ * que "t1 = 1 / 2" se leería como división entera — que es justo lo que C haría
+ * si la Etapa 6 emitiera eso. Y "2.5 + 1" se lee como un int sumado a un float,
+ * la expresión que el propio SPEC declara error de tipos. El punto no es
+ * decorativo: es lo que distingue el literal.
+ *
+ * Los no finitos ("inf", "nan", y los "1.#INF" de MSVCRT) ya traen letra o
+ * punto, así que el strpbrk los deja en paz. */
+static void print_float(double v) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "%.15g", v);
+    printf("%s", buf);
+    if (!strpbrk(buf, ".eEnN")) printf(".0");
+}
+
 /* Sin `default` a propósito: así -Wswitch obliga a cubrir cualquier AddrKind
  * que se añada en el futuro. */
 static void print_addr(const Addr* a) {
     switch (a->kind) {
         case ADDR_NONE:        break;
         case ADDR_CONST_INT:   printf("%lld", a->i); break;
-        case ADDR_CONST_FLOAT: printf("%.15g", a->f); break;
+        case ADDR_CONST_FLOAT: print_float(a->f); break;
         case ADDR_CONST_BOOL:  printf("%s", a->b ? "true" : "false"); break;
         case ADDR_CONST_STR:   printf("\"%s\"", a->s); break;
         case ADDR_VAR:         printf("%s", a->s); break;
