@@ -61,6 +61,7 @@ Genera el ejecutable `kelc` (o `kelc.exe` en Windows).
 ./kelc --symbols programa.kel  # muestra la tabla de símbolos
 ./kelc --ir programa.kel       # muestra el código intermedio TAC (Etapa 4)
 ./kelc --opt programa.kel      # muestra el TAC optimizado (Etapa 5)
+./kelc --stats programa.kel    # métricas del compilador y reducción del --opt
 ./kelc --emit-c programa.kel > programa.c   # imprime el C generado (Etapa 6)
 ./kelc programa.kel -o programa             # ejecutable vía gcc (Etapa 6)
 ./kelc --sem programa.kel      # solo reporta resultado semántico
