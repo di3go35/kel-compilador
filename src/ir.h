@@ -1,5 +1,5 @@
-#ifndef KEL_CODEGEN_H
-#define KEL_CODEGEN_H
+#ifndef KEL_IR_H
+#define KEL_IR_H
 
 /* ============================================================
  * Etapa 4 — Código intermedio (TAC: Three Address Code)
@@ -7,7 +7,7 @@
  * Pipeline previsto:
  *   AST anotado (semantic.c)  →  IR (lista lineal de Instr)
  *                             →  optimización (Etapa 5)
- *                             →  C de salida (Etapa 6)
+ *                             →  C de salida (Etapa 6, emit_c.c)
  *
  * Cada instrucción tiene como máximo 3 direcciones: dst, op1, op2.
  * Los operandos son "Addr": variables, temporales (t1, t2, ...),

@@ -279,7 +279,10 @@ src/
   parser.h  / parser.c     — Etapa 2: parser descendente recursivo → AST
   semantic.h/ semantic.c   — Etapa 3: tabla de símbolos + chequeo de tipos
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
-  codegen.h                — esqueleto para Etapa 4 (TAC)
+  ir.h      / ir.c         — Etapa 4: generación de código intermedio (TAC)
+  optimize.h/ optimize.c   — Etapa 5: optimización local sobre bloques básicos
+  emit_c.h  / emit_c.c     — Etapa 6: generación de C
+  symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
   main.c                   — CLI
 tests/
   ok/                      — programas válidos
@@ -324,7 +327,7 @@ sintaxis con línea y columna.
 
 #### Etapa 4 — Código intermedio
 
-TAC (Three Address Code). Ver `src/codegen.h` para el formato decidido.
+TAC (Three Address Code). Ver `src/ir.h` para el formato decidido.
 
 #### Etapa 5 — Optimización básica
 
