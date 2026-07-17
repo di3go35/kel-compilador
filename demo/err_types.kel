@@ -1,0 +1,3 @@
+fn main() {
+  val a = 1 + "texto"
+}

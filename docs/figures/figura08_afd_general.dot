@@ -1,0 +1,88 @@
+// Figura 8: Autómata finito determinista general del analizador léxico
+// Basado en kel_tokenize() — lexer.c:185-283
+// Compilar: dot -Tpng -O figura08_afd_general.dot
+
+digraph AFD_General {
+    rankdir=LR;
+    bgcolor="white";
+    nodesep=0.5;
+    ranksep=0.8;
+    fontname="Arial";
+    fontsize=11;
+
+    node [shape=box, style="rounded,filled", fillcolor="#E8F0FE", fontname="Arial", fontsize=10];
+    edge [fontname="Arial", fontsize=9];
+
+    // Estado inicial (START)
+    START [label="START", shape=ellipse, fillcolor="#C6EFCE", style=filled];
+
+    // Estados intermedios
+    LINE_COMMENT [label="LINE_COMMENT", fillcolor="#FFF2CC"];
+    BLOCK_COMMENT [label="BLOCK_COMMENT", fillcolor="#FFF2CC"];
+    IDENT [label="IDENT\nscan_identifier"];
+    NUMBER [label="NUMBER\nscan_number"];
+    FLOAT [label="FLOAT"];
+    STRING [label="STRING\nscan_string"];
+    OPERATOR [label="Operador\n1 char lookahead"];
+
+    // Estados de aceptación
+    ACCEPT_EOF [label="TOKEN_EOF\n(estado final)", shape=doublecircle, fillcolor="#D9E2F3"];
+    ACCEPT_IDENT [label="TOKEN_IDENT\n/keyword", shape=ellipse, fillcolor="#D9E2F3"];
+    ACCEPT_INT [label="TOKEN_INT_LIT", shape=ellipse, fillcolor="#D9E2F3"];
+    ACCEPT_FLOAT [label="TOKEN_FLOAT_LIT", shape=ellipse, fillcolor="#D9E2F3"];
+    ACCEPT_STR [label="TOKEN_STR_LIT", shape=ellipse, fillcolor="#D9E2F3"];
+    ACCEPT_OP [label="Token operador\n/delimitador", shape=ellipse, fillcolor="#D9E2F3"];
+
+    // Transiciones desde START
+    START -> START [label="[ \\t\\r\\n]\ndescarta"];
+    START -> LINE_COMMENT [label="\"//\""];
+    START -> BLOCK_COMMENT [label="\"/*\""];
+    START -> IDENT [label="[a-zA-Z_]\nletra o _"];
+    START -> NUMBER [label="[0-9]\ndígito"];
+    START -> STRING [label="'\"'"];
+    START -> OPERATOR [label="operadores\ny signos"];
+
+    // Comentarios vuelven a START
+    LINE_COMMENT -> START [label="\\n o EOF"];
+    BLOCK_COMMENT -> START [label="\"*/\""];
+
+    // Identificador
+    IDENT -> IDENT [label="[a-zA-Z0-9_]\n(letra|dig|_)"];
+    IDENT -> ACCEPT_IDENT [label="otro\n→ lookup keywords"];
+
+    // Números: bifurcación entero / flotante
+    NUMBER -> NUMBER [label="[0-9]"];
+    NUMBER -> FLOAT [label="'.' y dígito\nsiguiente"];
+    NUMBER -> ACCEPT_INT [label="otro carácter\n(no dígito, no '.')"];
+    FLOAT -> FLOAT [label="[0-9]"];
+    FLOAT -> ACCEPT_FLOAT [label="otro carácter"];
+
+    // Strings
+    STRING -> STRING [label="[^'\\n\"]\ncontenido"];
+    STRING -> ACCEPT_STR [label="'\"'"];
+
+    // Operadores y signos
+    OPERATOR -> ACCEPT_OP [label="maximal munch\n→ emite token"];
+    ACCEPT_OP -> START [label="retorna a\nSTART"];
+
+    // Error léxico
+    ACCEPT_OP -> START [style=dotted, label="error: & suelto,\n| suelto, . suelto", constraint=false];
+
+    // Todos los aceptores vuelven a START (excepto EOF)
+    ACCEPT_IDENT -> START [label="siguiente\ntoken"];
+    ACCEPT_INT -> START [label="siguiente\ntoken"];
+    ACCEPT_FLOAT -> START [label="siguiente\ntoken"];
+    ACCEPT_STR -> START [label="siguiente\ntoken"];
+
+    // EOF es final (no retorna)
+    START -> ACCEPT_EOF [label="EOF\n(entrada agotada)", color="#CC0000", penwidth=2];
+
+    // Subgraph para agrupar aceptación
+    subgraph cluster_leyenda {
+        label="Convenciones";
+        style=dashed;
+        fontsize=10;
+        node [shape=plaintext, fontsize=9, fillcolor=white];
+        "inicio" [label="Óvalo verde: estado inicial\nDoble círculo: estado final\nRectángulo: estado de proceso\nÓvalo azul: estado de aceptación"];
+    }
+}

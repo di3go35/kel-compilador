@@ -1,3 +1,4 @@
+#define __USE_MINGW_ANSI_STDIO 1
 #include "semantic.h"
 #include "diag.h"
 #include "symtab.h"
