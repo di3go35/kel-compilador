@@ -1,0 +1,6 @@
+fn main() {
+  val p = true
+  val q = false
+  val a = p && q
+  val b = p || q
+}

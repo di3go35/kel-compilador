@@ -99,6 +99,25 @@ static Addr new_temp(IRFunction* f, KelType* t) {
     return a;
 }
 
+/* Una etiqueta no es un valor: no lleva KelType (ver "Tipos" en ir.h). */
+static Addr addr_label(long long id) {
+    Addr a = addr_none();
+    a.kind = ADDR_LABEL;
+    a.i = id;
+    return a;
+}
+
+/* Las etiquetas se numeran por función, igual que los temporales. */
+static long long new_label(IRFunction* f) {
+    return (long long)(++f->n_labels);
+}
+
+static void emit_label(IRFunction* f, long long id) {
+    Instr in = instr(IR_LABEL);
+    in.dst = addr_label(id);
+    emit(f, in);
+}
+
 /* ---------- Generación de expresiones y sentencias ---------- */
 
 static Addr gen_expr(IRFunction* f, Node* n);
@@ -111,7 +130,41 @@ static void emit_copy(IRFunction* f, Addr dst, Addr src) {
     emit(f, in);
 }
 
+/* `&&` y `||` no son IR_BINOP: eso evaluaría los dos lados siempre, y
+ * `f() && g()` ejecutaría g() aunque f() fuese falso. La traducción usa
+ * cortocircuito con etiquetas:
+ *
+ *     t = a                 t = a
+ *     ifFalse t goto L      if t goto L
+ *     t = b                 t = b
+ *   L:                    L:
+ *      (&&)                  (||)
+ *
+ * El temporal se reserva antes del lado izquierdo porque ambas ramas
+ * escriben en él. */
+static Addr gen_shortcircuit(IRFunction* f, Node* n) {
+    int is_and = (strcmp(n->op, "&&") == 0);
+    Addr t = new_temp(f, n->inferred_type);
+
+    Addr a = gen_expr(f, n->lhs);
+    emit_copy(f, t, a);
+
+    long long L = new_label(f);
+    Instr jmp = instr(is_and ? IR_IF_FALSE_GOTO : IR_IF_GOTO);
+    jmp.op1 = t;
+    jmp.op2 = addr_label(L);
+    emit(f, jmp);
+
+    Addr b = gen_expr(f, n->rhs);
+    emit_copy(f, t, b);
+
+    emit_label(f, L);
+    return t;
+}
+
 static Addr gen_binop(IRFunction* f, Node* n) {
+    if (strcmp(n->op, "&&") == 0 || strcmp(n->op, "||") == 0)
+        return gen_shortcircuit(f, n);
     Addr a = gen_expr(f, n->lhs);
     Addr b = gen_expr(f, n->rhs);
     Addr d = new_temp(f, n->inferred_type);
@@ -281,6 +334,25 @@ static void print_instr(const Instr* in) {
             print_addr(&in->dst);
             printf(" = %s", in->sym);
             print_addr(&in->op1);
+            printf("\n");
+            break;
+        case IR_GOTO:
+            printf("  goto ");
+            print_addr(&in->op1);
+            printf("\n");
+            break;
+        case IR_IF_GOTO:
+            printf("  if ");
+            print_addr(&in->op1);
+            printf(" goto ");
+            print_addr(&in->op2);
+            printf("\n");
+            break;
+        case IR_IF_FALSE_GOTO:
+            printf("  ifFalse ");
+            print_addr(&in->op1);
+            printf(" goto ");
+            print_addr(&in->op2);
             printf("\n");
             break;
         default:
