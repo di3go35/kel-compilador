@@ -82,7 +82,7 @@ src/
   diag.h    / diag.c       — reporte de errores con línea fuente y carat
   ir.h                     — Etapa 4: tipos del código intermedio (TAC)
   ir.c                     — Etapa 4: generación de TAC             (pendiente)
-  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos
   main.c                   — CLI
 tests/
   ok/                      — programas válidos

@@ -283,7 +283,7 @@ src/
   ir.c                     — Etapa 4: generación de TAC             (pendiente)
   optimize.h/ optimize.c   — Etapa 5: optimización local            (pendiente)
   emit_c.h  / emit_c.c     — Etapa 6: generación de C               (pendiente)
-  symtab.h  / symtab.c     — log de la tabla de símbolos            (pendiente)
+  symtab.h  / symtab.c     — log de la tabla de símbolos (--symbols)
   main.c                   — CLI
 tests/
   ok/                      — programas válidos
