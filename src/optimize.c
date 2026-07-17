@@ -222,6 +222,76 @@ static int local_pass(IRFunction* f) {
     return changed;
 }
 
+/* Plegado de saltos: si la condición ya es una constante booleana, el salto se
+ * resuelve. Reconstruye el cuerpo porque un salto que nunca se toma se elimina.
+ * Seguro con la localidad de bloque: una condición solo es constante si su
+ * cálculo cayó en el mismo bloque (un while con variable nunca llega aquí). */
+static int branch_fold_pass(IRFunction* f) {
+    int changed = 0; size_t w = 0;
+    for (size_t j = 0; j < f->count; j++) {
+        Instr* in = &f->body[j];
+        if ((in->op == IR_IF_GOTO || in->op == IR_IF_FALSE_GOTO)
+                && in->op1.kind == ADDR_CONST_BOOL) {
+            int taken = (in->op == IR_IF_GOTO) ? in->op1.b : !in->op1.b;
+            changed = 1;
+            if (taken) {                 /* siempre salta -> goto incondicional */
+                Instr g; memset(&g, 0, sizeof g);
+                g.op = IR_GOTO; g.op1 = in->op2;
+                f->body[w++] = g;
+            }                            /* nunca salta -> se descarta */
+            continue;
+        }
+        f->body[w++] = *in;
+    }
+    f->count = w;
+    return changed;
+}
+
+/* Código inalcanzable: tras un goto o return incondicional, todo hasta la
+ * siguiente etiqueta es inalcanzable. Una etiqueta reinicia la alcanzabilidad
+ * (puede ser destino de otro salto). */
+static int unreachable_pass(IRFunction* f) {
+    int changed = 0; size_t w = 0; int dead = 0;
+    for (size_t j = 0; j < f->count; j++) {
+        Instr* in = &f->body[j];
+        if (in->op == IR_LABEL) dead = 0;
+        if (dead) { changed = 1; continue; }
+        f->body[w++] = *in;
+        if (in->op == IR_GOTO || in->op == IR_RETURN) dead = 1;
+    }
+    f->count = w;
+    return changed;
+}
+
+/* Etiquetas sin ningún salto que las apunte: se borran. No ahorra trabajo en
+ * ejecución; existe para que el C generado no dispare -Wunused-label con
+ * -Werror (§5.4.2). */
+static int label_cleanup_pass(IRFunction* f) {
+    unsigned char* ref = (unsigned char*)calloc(f->n_labels + 1, 1);
+    for (size_t j = 0; j < f->count; j++) {
+        const Instr* in = &f->body[j];
+        if (in->op == IR_GOTO && in->op1.kind == ADDR_LABEL
+                && in->op1.i >= 1 && (size_t)in->op1.i <= f->n_labels)
+            ref[in->op1.i] = 1;
+        if ((in->op == IR_IF_GOTO || in->op == IR_IF_FALSE_GOTO)
+                && in->op2.kind == ADDR_LABEL
+                && in->op2.i >= 1 && (size_t)in->op2.i <= f->n_labels)
+            ref[in->op2.i] = 1;
+    }
+    int changed = 0; size_t w = 0;
+    for (size_t j = 0; j < f->count; j++) {
+        const Instr* in = &f->body[j];
+        if (in->op == IR_LABEL && in->dst.i >= 1
+                && (size_t)in->dst.i <= f->n_labels && !ref[in->dst.i]) {
+            changed = 1; continue;
+        }
+        f->body[w++] = *in;
+    }
+    f->count = w;
+    free(ref);
+    return changed;
+}
+
 /* Cuenta lecturas de cada temporal (id 1..n_temps). op1 y op2 siempre son
  * fuentes; en IR_INDEX_STORE, dst TAMBIÉN es fuente (op1[op2] = dst, ver ir.h). */
 static void count_temp_reads(const Instr* in, unsigned* reads, size_t nt) {
@@ -264,12 +334,27 @@ static int dce_pass(IRFunction* f) {
     return changed;
 }
 
+#define OPT_MAX_ITERS 50
+
 OptStats kel_optimize(IRProgram* p) {
     OptStats st;
     st.instr_before = count_instrs(p);
     for (size_t i = 0; i < p->count; i++) {
-        local_pass(&p->fns[i]);
-        dce_pass(&p->fns[i]);
+        IRFunction* f = &p->fns[i];
+        int changed = 1, iters = 0;
+        /* Hasta punto fijo: un pase habilita a otro. Hace falta iterar, no solo
+         * ordenar: unreachable_pass borra un goto que orphana una etiqueta que
+         * label_cleanup_pass ya había pasado (caso de flujo.kel), así que hace
+         * falta una segunda vuelta de limpieza. El tope garantiza terminación
+         * aunque un pase futuro oscile. */
+        while (changed && iters++ < OPT_MAX_ITERS) {
+            changed = 0;
+            changed |= local_pass(f);
+            changed |= branch_fold_pass(f);
+            changed |= label_cleanup_pass(f);   /* antes que unreachable (Task 6) */
+            changed |= unreachable_pass(f);
+            changed |= dce_pass(f);
+        }
     }
     st.instr_after = count_instrs(p);
     return st;
