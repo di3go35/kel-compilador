@@ -1,0 +1,14 @@
+fn main() {
+  var t = 0
+  if t > 0 {
+    t = 1
+  } else {
+    t = 2
+  }
+  while t < 5 {
+    t = t + 1
+  }
+  for i in 0..3 {
+    t = t + i
+  }
+}

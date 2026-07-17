@@ -131,6 +131,24 @@ static void emit_copy(IRFunction* f, Addr dst, Addr src) {
     emit(f, in);
 }
 
+/* Los saltos del control de flujo no necesitan backpatching: el id de la
+ * etiqueta se reserva con new_label() ANTES de emitir el salto, así que el
+ * destino ya se conoce aunque el IR_LABEL se emita más tarde. Es lo que evita
+ * tener que volver sobre una Instr ya emitida — que con el realloc de emit()
+ * exigiría guardar el índice, nunca el puntero (ver el aviso en emit()). */
+static void emit_goto(IRFunction* f, long long L) {
+    Instr in = instr(IR_GOTO);
+    in.op1 = addr_label(L);
+    emit(f, in);
+}
+
+static void emit_if_false_goto(IRFunction* f, Addr cond, long long L) {
+    Instr in = instr(IR_IF_FALSE_GOTO);
+    in.op1 = cond;
+    in.op2 = addr_label(L);
+    emit(f, in);
+}
+
 /* `&&` y `||` no son IR_BINOP: eso evaluaría los dos lados siempre, y
  * `f() && g()` ejecutaría g() aunque f() fuese falso. La traducción usa
  * cortocircuito con etiquetas:
@@ -358,6 +376,82 @@ static void gen_stmt(IRFunction* f, Node* n) {
             Instr in = instr(IR_RETURN);
             if (n->lhs) in.op1 = gen_expr(f, n->lhs);
             emit(f, in);
+            break;
+        }
+        case N_IF: {
+            /*     ifFalse cond goto L_else
+             *     <then>
+             *     goto L_end            ; solo si hay else
+             *   L_else:
+             *     <else>
+             *   L_end:
+             *
+             * Sin else, L_else hace de etiqueta de salida y no hacen falta ni
+             * el goto ni la segunda etiqueta. */
+            Addr c = gen_expr(f, n->cond);
+            long long L_else = new_label(f);
+            emit_if_false_goto(f, c, L_else);
+            gen_stmt(f, n->then_branch);
+            if (n->else_branch) {
+                long long L_end = new_label(f);
+                emit_goto(f, L_end);
+                emit_label(f, L_else);
+                gen_stmt(f, n->else_branch);
+                emit_label(f, L_end);
+            } else {
+                emit_label(f, L_else);
+            }
+            break;
+        }
+        case N_WHILE: {
+            /* La etiqueta va antes de la condición: hay que reevaluarla
+             * en cada vuelta. */
+            long long L_cond = new_label(f);
+            long long L_end  = new_label(f);
+            emit_label(f, L_cond);
+            Addr c = gen_expr(f, n->cond);
+            emit_if_false_goto(f, c, L_end);
+            gen_stmt(f, n->body);
+            emit_goto(f, L_cond);
+            emit_label(f, L_end);
+            break;
+        }
+        case N_FOR: {
+            /* for i in a..b  ==>  i = a; Lc: ifFalse i < b goto Lf;
+             *                     cuerpo; i = i + 1; goto Lc; Lf:
+             * El fin es exclusivo (ver SPEC.md). */
+            Addr start = gen_expr(f, n->range_start);
+            KelType* it = n->range_start->inferred_type;
+            Addr iv = addr_var(n->loop_var, it);
+            emit_copy(f, iv, start);
+
+            long long L_cond = new_label(f);
+            long long L_end  = new_label(f);
+            emit_label(f, L_cond);
+
+            Addr end = gen_expr(f, n->range_end);
+            Addr c = new_temp(f, NULL);   /* bool; el AST no tiene nodo para esta comparación */
+            Instr cmp = instr(IR_BINOP);
+            cmp.dst = c;
+            cmp.op1 = iv;
+            cmp.op2 = end;
+            cmp.sym = "<";
+            emit(f, cmp);
+            emit_if_false_goto(f, c, L_end);
+
+            gen_stmt(f, n->body);
+
+            Addr inc = new_temp(f, it);
+            Instr add = instr(IR_BINOP);
+            add.dst = inc;
+            add.op1 = iv;
+            add.op2 = addr_const_int(1, it);
+            add.sym = "+";
+            emit(f, add);
+            emit_copy(f, iv, inc);
+
+            emit_goto(f, L_cond);
+            emit_label(f, L_end);
             break;
         }
         default:
