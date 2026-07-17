@@ -28,7 +28,7 @@ reparte 20 puntos en 12 criterios. Estado actual:
 | 4 | Implementación del léxico | 2.0 | Cubierto (`lexer.c`) |
 | 5 | Gramática BNF/EBNF + ambigüedad | 2.0 | **Falta** |
 | 6 | Implementación del sintáctico | 2.0 | Cubierto (`parser.c`) |
-| 7 | Semántico + tabla de símbolos | 2.0 | Parcial: el análisis existe, la tabla no se puede mostrar |
+| 7 | Semántico + tabla de símbolos | 2.0 | **Cubierto** (`--symbols`, Plan 1) |
 | 8 | Código intermedio | 1.5 | **Falta** |
 | 9 | Optimización | 1.0 | **Falta** |
 | 10 | Código final | 2.0 | **Falta** |
@@ -113,20 +113,24 @@ firma, que una lista de instrucciones no lleva.
 
 ```c
 typedef struct {
-    char*    name;
-    Param*   params;
+    char*    name;          /* owned */
+    Param*   params;        /* no-owned; apunta al AST */
     size_t   param_count;
-    KelType* ret_type;
-    Instr*   body;
+    KelType* ret_type;      /* no-owned; apunta al AST */
+    Instr*   body;          /* owned */
     size_t   count, capacity;
-    int      n_temps;   /* temporales usados: t1..t_n */
+    size_t   n_temps;       /* temporales usados: t1..t_temps */
+    size_t   n_labels;      /* etiquetas usadas: L1..L_labels */
 } IRFunction;
 
 typedef struct {
-    IRFunction* fns;
+    IRFunction* fns;        /* owned */
     size_t      count, capacity;
 } IRProgram;
 ```
+
+(Tal como quedó implementado en `src/ir.h`: `size_t` en los contadores, por
+coherencia con el resto del codebase.)
 
 El optimizador trabaja por función de forma natural con esta estructura.
 
@@ -141,8 +145,13 @@ tener que leer este spec.
 
 | Opcode | Forma | Motivo |
 |--------|-------|--------|
-| `IR_ARRAY_NEW` | `dst = array[n]` | No había forma de representar `val nums = [1,2,3]` |
+| `IR_ARRAY_NEW` | `dst = alloc <tipo>[n]` | No había forma de representar `val nums = [1,2,3]` |
 | `IR_READ` | `dst = read <tipo>` | Built-ins de entrada (§5.1) |
+
+`IR_ARRAY_NEW` se imprime como `alloc`, no como `array`: `IR_INDEX_LOAD` imprime
+`t4 = arr[i]`, y `array` no es palabra reservada en Kel, así que `t6 = array[3]`
+se leería como una indexación sobre una variable con ese nombre. El `--ir` se
+demuestra en vivo, de modo que la ambigüedad tiene coste real.
 
 `IR_INDEX_LOAD` e `IR_INDEX_STORE` ya existen y se reutilizan: un literal de
 array se traduce a un `IR_ARRAY_NEW` seguido de un `IR_INDEX_STORE` por
