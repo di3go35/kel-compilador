@@ -168,6 +168,20 @@ val s = read_line()      // lee una línea completa, incluidos espacios
   añadir un built-in no toca el autómata léxico ni la gramática.
 - Redefinirlas es un error: `fn read_int() -> int { ... }` no compila.
 
+#### ¿Por qué `println` sí es palabra clave y `read_*` no?
+
+Porque son cosas gramaticalmente distintas. `println(x)` es una **sentencia**:
+no produce valor y no puede aparecer dentro de una expresión, así que necesita
+su propia regla en la gramática y su token (`TOKEN_PRINTLN`).
+
+`read_int()` es una **expresión**: produce un valor y tiene que poder aparecer
+donde quepa cualquier otro (`val a = read_int()`, `read_int() + 1`). Eso es
+exactamente lo que ya hace una llamada a función, de modo que no necesita ni
+token ni regla nueva — basta con registrar su firma.
+
+La consecuencia práctica: añadir un built-in de entrada no toca el lexer ni el
+parser, solo la tabla de funciones del análisis semántico.
+
 ### Operadores
 
 | Categoría     | Operadores                    |
@@ -258,10 +272,12 @@ Los comentarios son descartados por el lexer, nunca llegan al parser.
 | Cadena `"hola"` | `TOKEN_STR_LIT`   | Entre comillas dobles       |
 | Identificador   | `TOKEN_IDENT`     | `[a-zA-Z_][a-zA-Z0-9_]*`    |
 | Fin de archivo  | `TOKEN_EOF`       | —                           |
+| Error léxico    | `TOKEN_ERROR`     | Carácter no reconocido      |
 | Comentarios     | *(descartado)*    | No generan token            |
 | Whitespace      | *(descartado)*    | No generan token            |
 
-**Total: 47 tokens**
+**Total: 47 tokens** — 16 palabras clave + 17 operadores + 8 delimitadores +
+6 literales y especiales. Coincide con el enum `TokenType` de `src/lexer.h`.
 
 ### Notas de implementación críticas
 
