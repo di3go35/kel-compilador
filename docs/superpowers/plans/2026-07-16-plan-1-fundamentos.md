@@ -816,7 +816,7 @@ static int declare(Sem* S, const char* name, KelType* type, int mutable, const N
     }
     Symbol* sy = (Symbol*)calloc(1, sizeof(Symbol));
     sy->name = strdup(name);
-    sy->type = type_clone(type);
+    sy->type = kel_type_clone(type);
     sy->is_mutable = mutable;
     sy->next = S->scope->head;
     S->scope->head = sy;
