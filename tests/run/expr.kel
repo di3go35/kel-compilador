@@ -1,0 +1,14 @@
+fn main() {
+  val a = 2 + 3 * 4
+  println(a)
+  var b = a - 1
+  b = -b
+  println(b)
+  val s = "ho" + "la"
+  println(s)
+  val f = 1.0 / 2.0
+  println(f)
+  println(3.0)
+  val t = s == "hola"
+  println(t)
+}

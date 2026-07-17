@@ -1,5 +1,6 @@
 #include "emit_c.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* ============================================================
  * Etapa 6 — Emisión de C desde el TAC.
@@ -113,10 +114,155 @@ static void emit_fn_signature(FILE* out, const IRFunction* f) {
     fprintf(out, f->param_count ? ")" : "void)");
 }
 
+/* Constante float como texto C: %.17g de 1.0 da "1", y `t = 1 / 2` seria
+ * division entera EN EL C GENERADO. Mismo remedio que print_float de ir.c. */
+static void c_float(FILE* out, double v) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "%.17g", v);
+    fprintf(out, strpbrk(buf, ".eEnN") ? "%s" : "%s.0", buf);
+}
+
+/* Los str_val del AST pueden traer bytes de escape reales. */
+static void c_string_lit(FILE* out, const char* s) {
+    fputc('"', out);
+    for (; *s; s++) {
+        switch (*s) {
+            case '"':  fprintf(out, "\\\""); break;
+            case '\\': fprintf(out, "\\\\"); break;
+            case '\n': fprintf(out, "\\n"); break;
+            case '\r': fprintf(out, "\\r"); break;
+            case '\t': fprintf(out, "\\t"); break;
+            default:   fputc(*s, out); break;
+        }
+    }
+    fputc('"', out);
+}
+
+static void c_addr(FILE* out, const Addr* a) {
+    switch (a->kind) {
+        case ADDR_NONE:        break;
+        case ADDR_CONST_INT:   fprintf(out, "%lld", a->i); break;
+        case ADDR_CONST_FLOAT: c_float(out, a->f); break;
+        case ADDR_CONST_BOOL:  fprintf(out, "%d", a->b); break;
+        case ADDR_CONST_STR:   c_string_lit(out, a->s); break;
+        case ADDR_VAR:         fprintf(out, "k_%s", a->s); break;
+        case ADDR_TEMP:        fprintf(out, "t%lld", a->i); break;
+        case ADDR_LABEL:       fprintf(out, "L%lld", a->i); break;
+    }
+}
+
+/* El IR no distingue declaración de asignación (`a = t2` es ambas), así
+ * que las variables se descubren escaneando los dst de COPY/READ. Los
+ * parámetros no se redeclaran. Todo inicializado a 0: -Wmaybe-uninitialized
+ * da falsos positivos alrededor de goto (§5.4.3 del diseño); gcc elimina
+ * el dead store al optimizar. */
+static int is_param(const IRFunction* f, const char* name) {
+    for (size_t i = 0; i < f->param_count; i++)
+        if (strcmp(f->params[i].name, name) == 0) return 1;
+    return 0;
+}
+
+static void emit_declarations(FILE* out, const IRFunction* f) {
+    /* temporales: el primer dst ADDR_TEMP fija tipo; IR_ARRAY_NEW declara
+     * arreglo nativo (tamaño del op1; 0 -> 1: T t[0] es extensión de gcc) */
+    unsigned char* seen = (unsigned char*)calloc(f->n_temps + 1, 1);
+    for (size_t j = 0; j < f->count; j++) {
+        const Instr* in = &f->body[j];
+        if (in->dst.kind != ADDR_TEMP) continue;
+        long long id = in->dst.i;
+        if (seen[id]) continue;
+        seen[id] = 1;
+        if (in->op == IR_ARRAY_NEW) {
+            fprintf(out, "    ");
+            c_type(out, in->dst.type ? in->dst.type->elem : NULL);
+            fprintf(out, " t%lld[%lld];\n", id, in->op1.i > 0 ? in->op1.i : 1);
+        } else {
+            fprintf(out, "    ");
+            c_type(out, in->dst.type);   /* NULL -> long long (bool del for) */
+            fprintf(out, " t%lld = 0;\n", id);
+        }
+    }
+    free(seen);
+    /* variables de usuario (dst ADDR_VAR de COPY/READ), sin duplicar */
+    const char* done[256]; size_t n_done = 0;
+    for (size_t j = 0; j < f->count; j++) {
+        const Instr* in = &f->body[j];
+        if (in->dst.kind != ADDR_VAR) continue;
+        if (in->op != IR_COPY && in->op != IR_READ) continue;
+        if (is_param(f, in->dst.s)) continue;
+        int dup = 0;
+        for (size_t k = 0; k < n_done; k++)
+            if (strcmp(done[k], in->dst.s) == 0) { dup = 1; break; }
+        if (dup) continue;
+        if (n_done < 256) done[n_done++] = in->dst.s;
+        fprintf(out, "    ");
+        c_type(out, in->dst.type);
+        fprintf(out, " k_%s = 0;\n", in->dst.s);
+    }
+}
+
+static int is_string(const Addr* a) {
+    return a->type && a->type->kind == KT_STRING;
+}
+
+static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
+    (void)f;
+    switch (in->op) {
+        case IR_COPY:
+            fprintf(out, "    ");
+            c_addr(out, &in->dst); fprintf(out, " = ");
+            c_addr(out, &in->op1); fprintf(out, ";\n");
+            break;
+        case IR_BINOP:
+            fprintf(out, "    ");
+            c_addr(out, &in->dst); fprintf(out, " = ");
+            if (is_string(&in->op1)) {
+                if (strcmp(in->sym, "+") == 0) {
+                    fprintf(out, "kel_concat(");
+                    c_addr(out, &in->op1); fprintf(out, ", ");
+                    c_addr(out, &in->op2); fprintf(out, ")");
+                } else {
+                    /* == o != sobre strings: comparar contenido, no punteros */
+                    fprintf(out, "(strcmp(");
+                    c_addr(out, &in->op1); fprintf(out, ", ");
+                    c_addr(out, &in->op2); fprintf(out, ") %s 0)", in->sym);
+                }
+            } else {
+                c_addr(out, &in->op1);
+                fprintf(out, " %s ", in->sym);
+                c_addr(out, &in->op2);
+            }
+            fprintf(out, ";\n");
+            break;
+        case IR_UNOP:
+            fprintf(out, "    ");
+            c_addr(out, &in->dst); fprintf(out, " = %s", in->sym);
+            c_addr(out, &in->op1); fprintf(out, ";\n");
+            break;
+        case IR_PRINTLN:
+            fprintf(out, "    ");
+            switch (in->op1.type ? in->op1.type->kind : KT_INT) {
+                case KT_FLOAT:  fprintf(out, "kel_print_float("); c_addr(out, &in->op1); fprintf(out, ");"); break;
+                case KT_BOOL:   fprintf(out, "printf(\"%%s\\n\", "); c_addr(out, &in->op1); fprintf(out, " ? \"true\" : \"false\");"); break;
+                case KT_STRING: fprintf(out, "printf(\"%%s\\n\", "); c_addr(out, &in->op1); fprintf(out, ");"); break;
+                default:        fprintf(out, "printf(\"%%lld\\n\", "); c_addr(out, &in->op1); fprintf(out, ");"); break;
+            }
+            fprintf(out, "\n");
+            break;
+        default:
+            /* Andamio: si esto llega al .c, gcc no compila y el e2e falla
+             * con el mensaje a la vista. Cada task siguiente quita casos. */
+            fprintf(out, "    #error \"opcode %d sin emitir\"\n", (int)in->op);
+            break;
+    }
+}
+
 static void emit_function(FILE* out, const IRFunction* f) {
     emit_fn_signature(out, f);
     fprintf(out, " {\n");
-    /* Declaraciones e instrucciones: tasks siguientes. */
+    emit_declarations(out, f);
+    for (size_t j = 0; j < f->count; j++)
+        emit_instr(out, f, &f->body[j]);
     if (strcmp(f->name, "main") == 0) fprintf(out, "    return 0;\n");
     fprintf(out, "}\n");
 }
