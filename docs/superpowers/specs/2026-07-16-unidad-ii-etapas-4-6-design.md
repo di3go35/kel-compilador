@@ -229,6 +229,10 @@ requiere análisis de flujo de datos global, que excede el alcance del curso.
   puede modificar las variables escalares de quien llama. Esas no se invalidan.
 - Código inalcanzable (instrucciones tras `IR_GOTO`/`IR_RETURN` hasta la
   siguiente etiqueta) se elimina.
+- Tras eliminar código, las **etiquetas que quedan sin ningún salto que las
+  apunte se eliminan** también. No es una optimización real (no ahorra trabajo
+  en ejecución): existe para que el C generado no dispare `-Wunused-label`
+  (§5.4.2).
 
 ### 4.4 — Salida
 
@@ -329,6 +333,7 @@ Runtime (`kel_rt.h`, emitido inline):
 | Función | Uso |
 |---------|-----|
 | `kel_concat(a, b)` | `IR_BINOP` `+` sobre strings |
+| `kel_read_raw_line()` | interna: única puerta de entrada de stdin (§5.4.1) |
 | `kel_read_int()`, `kel_read_float()`, `kel_read_line()` | `IR_READ` |
 | helpers de `printf` por tipo | `IR_PRINTLN` |
 
@@ -340,6 +345,67 @@ compilación). `fn main()` → `int main(void)`.
 Los strings tienen fugas; la memoria se recupera al terminar el proceso. Kel v1
 no tiene GC ni conteo de referencias. Va documentado en "Alcances y
 limitaciones" del informe.
+
+#### 5.4.1 — Lectura de entrada: sin `scanf`, todo por líneas
+
+**`scanf` queda prohibido en el runtime.** Tiene dos fallos independientes:
+
+1. `scanf("%s", buf)` no acota la escritura → desbordamiento de búfer.
+2. `%s` corta en el primer espacio → `read_line()` devolvería una palabra, no
+   una línea. Estaría mal aunque el búfer fuera infinito.
+
+Y hay un tercero, peor, al mezclarlo: `scanf("%lld")` **deja el `\n` en el
+búfer**, de modo que un `read_line()` posterior devuelve cadena vacía sin
+esperar entrada. Es el bug clásico de C y el ejemplo `LEER A; LEER B` del
+profesor es exactamente el patrón que lo dispara.
+
+**Diseño:** una sola función interna `kel_read_raw_line()` es la única que toca
+stdin. Bucle con `fgetc` y crecimiento geométrico del búfer: no acota mal, no
+trunca, y es portable — `getline()` es POSIX y TDM-GCC va contra msvcrt, donde
+no existe. Los tres built-ins se construyen encima:
+
+- `kel_read_line()` → `kel_read_raw_line()` directo.
+- `kel_read_int()` → `kel_read_raw_line()` + `strtoll`.
+- `kel_read_float()` → `kel_read_raw_line()` + `strtod`.
+
+Al no haber `scanf` no hay estado residual en el búfer, y `strtoll`/`strtod`
+permiten detectar entrada inválida y emitir un error legible en vez de dejar la
+variable sin tocar.
+
+El puntero devuelto se hereda de `malloc` y no se libera, coherente con la
+limitación de strings ya aceptada.
+
+#### 5.4.2 — Etiquetas: siempre `L1: ;`
+
+En C anterior a C23 una etiqueta debe ir seguida de una sentencia, así que
+`L1: }` viola el estándar (gcc: *label at end of compound statement*). **En este
+codegen está garantizado que ocurre**: todo `while` termina con su etiqueta de
+salida, de modo que cualquier `while` en última posición del cuerpo de una
+función lo produce (`tests/ok/full.kel` ya tiene uno).
+
+No se trata como contingencia: **se emite `L1: ;` incondicionalmente**. El `;`
+sobrante es gratis y evita tener que decidir si una etiqueta es la última —
+lógica que podría fallar.
+
+Además, el optimizador puede dejar etiquetas sin ningún salto que las apunte, lo
+que dispara `-Wunused-label`. Un pase que elimine etiquetas sin referencias lo
+evita.
+
+**Requisito: el C generado debe compilar limpio con `gcc -Wall`.** El profesor lo
+va a compilar durante la defensa.
+
+#### 5.4.3 — Temporales: inicializados a cero
+
+Todos los temporales se declaran inicializados (`long long t1 = 0;`).
+
+Con la forma de IR del cortocircuito (§3.3) los temporales quedan siempre
+asignados antes de leerse, de modo que **no hay un bug real de uso sin
+inicializar**. Pero el `-Wmaybe-uninitialized` de gcc da falsos positivos
+conocidos alrededor de `goto`, porque su análisis de flujo se rinde ante saltos
+arbitrarios. La inicialización es un dead store que gcc elimina al optimizar:
+silencia el falso positivo, cumple el requisito de compilar limpio con `-Wall`,
+y actúa de red de seguridad si un bug futuro de codegen dejara un camino sin
+asignar. Coste real: cero.
 
 ### 5.5 — CLI final
 
@@ -374,6 +440,12 @@ Cada caso: `programa.kel` + `programa.expected`. Cadena completa: `kelc` →
 `.c` → `gcc` → ejecutar → comparar stdout contra `.expected`. Es lo único que
 demuestra que las etapas 4-6 funcionan de verdad.
 
+**El `gcc` de estos tests corre con `-Wall -Wextra` y trata los warnings como
+error.** El requisito de §5.4.2 (el C generado compila limpio) solo vale algo si
+un test lo hace fallar; si no, es una intención. Esto cubre a la vez las
+etiquetas colgantes, las etiquetas sin usar y los falsos positivos de
+`-Wmaybe-uninitialized`.
+
 ### 6.2 — Prueba de equivalencia del optimizador
 
 **La prueba más valiosa del proyecto.** Cada programa de `tests/run/` se compila
@@ -398,6 +470,18 @@ simplificó.
 
 `programa.kel` + `programa.stdin` + `programa.expected`, para alimentar los
 `read_*`.
+
+Casos obligatorios, cada uno cubriendo un fallo concreto de §5.4.1:
+
+| Caso | Qué caza |
+|------|----------|
+| `read_int()` seguido de `read_line()` | El `\n` residual: con `scanf` el `read_line` devolvería vacío |
+| `read_line()` con espacios ("hola mundo") | El `%s` que corta en el primer espacio |
+| `read_line()` con una línea muy larga (>4 KB) | Desbordamiento y truncado silencioso del búfer |
+| `read_int()` con entrada no numérica | Que `strtoll` detecte el error en vez de dejar basura |
+
+El primero replica el `LEER A; LEER B` del ejemplo del profesor, que es el
+patrón exacto que dispara el bug del búfer.
 
 `tests/ok/` y `tests/bad/` se conservan sin cambios.
 
@@ -472,6 +556,7 @@ Ninguna. Todas las decisiones de diseño quedaron cerradas con el usuario el
 | Riesgo | Mitigación |
 |--------|------------|
 | Un pase del optimizador altera la semántica | Prueba de equivalencia (§6.2) sobre toda la suite |
-| El C generado no compila con gcc | Tests end-to-end (§6.1) invocan gcc de verdad |
+| El C generado no compila, o compila con warnings delante del profesor | Tests end-to-end (§6.1) invocan gcc de verdad con `-Wall -Wextra` y warnings como error |
+| Desbordamiento o búfer residual al leer entrada | `scanf` prohibido; toda lectura por líneas (§5.4.1), con 4 tests dedicados (§6.4) |
 | Fugas de memoria en strings | Limitación aceptada y documentada (§5.4) |
 | El BNF documentado no coincide con `parser.c` | Se deriva leyendo el parser, no de memoria |
