@@ -336,12 +336,9 @@ static void emit_instr(FILE* out, const IRFunction* f, const Instr* in) {
             c_addr(out, &in->op2); fprintf(out, "] = ");
             c_addr(out, &in->dst); fprintf(out, ";\n");
             break;
-        default:
-            /* Andamio: si esto llega al .c, gcc no compila y el e2e falla
-             * con el mensaje a la vista. Cada task siguiente quita casos. */
-            fprintf(out, "    #error \"opcode %d sin emitir\"\n", (int)in->op);
-            break;
     }
+    /* Sin default: -Wswitch vigila que todo IROp tenga su caso, igual que
+     * print_instr en ir.c. Un opcode nuevo sin emitir será un warning aquí. */
 }
 
 static void emit_function(FILE* out, const IRFunction* f) {

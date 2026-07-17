@@ -135,6 +135,38 @@ done
 rm -rf "$E2E_DIR"
 
 echo
+echo "== tests/read (end-to-end con stdin) =="
+READ_DIR="$(mktemp -d)"
+for f in tests/read/*.kel; do
+    [ -e "$f" ] || continue
+    exp="${f%.kel}.expected"; sin="${f%.kel}.stdin"
+    base="$(basename "${f%.kel}")"
+    cfile="$READ_DIR/$base.c"; exe="$READ_DIR/$base.exe"
+    want_rc=0
+    [ -e "${f%.kel}.exitcode" ] && want_rc=$(cat "${f%.kel}.exitcode")
+    if ! "$KELC" --emit-c "$f" > "$cfile" 2>/dev/null; then
+        fail=$((fail+1)); fails+=("$f (kelc falló)"); printf "  FAIL %s (kelc falló)\n" "$f"; continue
+    fi
+    if ! gcc -Wall -Wextra -Werror -o "$exe" "$cfile" 2> "$READ_DIR/$base.gcc.log"; then
+        fail=$((fail+1)); fails+=("$f (C no compila)"); printf "  FAIL %s (gcc):\n" "$f"
+        sed 's/^/    /' "$READ_DIR/$base.gcc.log"; continue
+    fi
+    # rc del ejecutable, no del tr: capturamos la salida y $? antes de
+    # normalizar. Con un pipe, $? sería el de tr (siempre 0) y invalido.kel
+    # (que debe salir con 1) pasaría en falso.
+    raw=$("$exe" < "$sin" 2>/dev/null); rc=$?
+    got=$(printf '%s' "$raw" | tr -d '\r')
+    if [ "$rc" = "$want_rc" ] && [ "$got" = "$(cat "$exp" | tr -d '\r')" ]; then
+        pass=$((pass+1)); printf "  ok   %s\n" "$f"
+    else
+        fail=$((fail+1)); fails+=("$f (salida o exit code)")
+        printf "  FAIL %s (exit %s, esperado %s)\n    --- esperado ---\n%s\n    --- obtenido ---\n%s\n" \
+               "$f" "$rc" "$want_rc" "$(cat "$exp" | tr -d '\r')" "$got"
+    fi
+done
+rm -rf "$READ_DIR"
+
+echo
 echo "Resultado: $pass pasaron, $fail fallaron."
 if [ "$fail" -ne 0 ]; then
     echo "Fallos:"

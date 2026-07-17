@@ -1,0 +1,6 @@
+fn main() {
+  val n = read_int()
+  val linea = read_line()
+  println(n)
+  println(linea)
+}
