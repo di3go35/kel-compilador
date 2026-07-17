@@ -1,4 +1,5 @@
 #include "ir.h"
+#include "semantic.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -188,6 +189,72 @@ static Addr gen_unop(IRFunction* f, Node* n) {
     return d;
 }
 
+/* println y los read_* llegan como N_CALL: println se parsea como N_IDENT
+ * (parser.c:152) y los read_* son identificadores normales. Se distinguen
+ * por nombre con kel_is_println/kel_is_read_builtin, expuestos por
+ * semantic.h, para no duplicar aquí la lista de nombres.
+ *
+ * CONVENIO DE LLAMADA (lo necesita la Etapa 6): `call sym, n` consume los n
+ * IR_PARAM *más recientes*. Los args se generan en orden y cada uno emite su
+ * param justo después de su propio código, así que una llamada anidada deja
+ * los params intercalados — pero nunca ambiguos, porque la llamada de dentro
+ * consume los suyos antes de que se emitan los de fuera:
+ *
+ *     suma(suma(1,2), 3)  ->   param 1
+ *                              param 2
+ *                              t1 = call suma, 2   ; consume 1 y 2
+ *                              param t1
+ *                              param 3
+ *                              t2 = call suma, 2   ; consume t1 y 3
+ *
+ * Es decir: emit_c.c puede recoger los args escaneando hacia atrás los n
+ * params anteriores al call, sin cruzar nunca los de otra llamada. */
+static Addr gen_call(IRFunction* f, Node* n) {
+    const char* name = n->lhs->str_val;
+
+    /* item_count == 1 lo garantiza el semántico: --ir solo corre si el
+     * análisis fue limpio (main.c). */
+    if (kel_is_println(name)) {
+        Addr v = gen_expr(f, n->items[0]);
+        Instr in = instr(IR_PRINTLN);
+        in.op1 = v;
+        emit(f, in);
+        return addr_none();          /* println es void */
+    }
+
+    /* El tipo viaja en dst.type: los read_* se registran con un ret_type real
+     * (semantic.c), así que inferred_type nunca es NULL aquí. */
+    if (kel_is_read_builtin(name)) {
+        Addr d = new_temp(f, n->inferred_type);
+        Instr in = instr(IR_READ);
+        in.dst = d;
+        emit(f, in);
+        return d;
+    }
+
+    for (size_t i = 0; i < n->item_count; i++) {
+        Addr a = gen_expr(f, n->items[i]);
+        Instr pin = instr(IR_PARAM);
+        pin.op1 = a;
+        emit(f, pin);
+    }
+
+    Instr in = instr(IR_CALL);
+    in.sym = name;                   /* no-owned: apunta al AST */
+    /* El nº de argumentos no lleva tipo: el opcode ya lo implica (ver ir.h). */
+    in.op2 = addr_const_int((long long)n->item_count, NULL);
+    /* Una fn sin `->` tiene ret_type = KT_VOID real (parser.c:418), no NULL;
+     * el chequeo de NULL es defensivo. Sin dst, print_instr omite el "=". */
+    int is_void = !n->inferred_type || n->inferred_type->kind == KT_VOID;
+    Addr d = addr_none();
+    if (!is_void) {
+        d = new_temp(f, n->inferred_type);
+        in.dst = d;
+    }
+    emit(f, in);
+    return d;
+}
+
 /* El `default` con fprintf es un andamio: cada task siguiente le va quitando
  * casos. Al cerrar la Etapa 4 no debe quedar ningún nodo cayendo aquí. */
 static Addr gen_expr(IRFunction* f, Node* n) {
@@ -199,6 +266,7 @@ static Addr gen_expr(IRFunction* f, Node* n) {
         case N_IDENT:     return addr_var(n->str_val, n->inferred_type);
         case N_BINOP:     return gen_binop(f, n);
         case N_UNOP:      return gen_unop(f, n);
+        case N_CALL:      return gen_call(f, n);
         default:
             fprintf(stderr, "ir: nodo de expresión no soportado (kind %d)\n",
                     (int)n->kind);
@@ -229,6 +297,14 @@ static void gen_stmt(IRFunction* f, Node* n) {
         case N_EXPR_STMT:
             gen_expr(f, n->lhs);
             break;
+        case N_RETURN: {
+            /* n->lhs es NULL en un `return` pelado: el op1 se queda en
+             * ADDR_NONE y es lo que distingue `return` de `return 0`. */
+            Instr in = instr(IR_RETURN);
+            if (n->lhs) in.op1 = gen_expr(f, n->lhs);
+            emit(f, in);
+            break;
+        }
         default:
             fprintf(stderr, "ir: sentencia no soportada (kind %d)\n", (int)n->kind);
             break;
@@ -354,6 +430,40 @@ static void print_instr(const Instr* in) {
             printf(" goto ");
             print_addr(&in->op2);
             printf("\n");
+            break;
+        case IR_PARAM:
+            printf("  param ");
+            print_addr(&in->op1);
+            printf("\n");
+            break;
+        case IR_CALL:
+            printf("  ");
+            /* Sin dst (fn void) no se imprime el "=": `call saluda, 0`. */
+            if (in->dst.kind != ADDR_NONE) {
+                print_addr(&in->dst);
+                printf(" = ");
+            }
+            printf("call %s, %lld\n", in->sym, in->op2.i);
+            break;
+        case IR_RETURN:
+            if (in->op1.kind == ADDR_NONE) {
+                printf("  return\n");
+            } else {
+                printf("  return ");
+                print_addr(&in->op1);
+                printf("\n");
+            }
+            break;
+        case IR_PRINTLN:
+            printf("  println ");
+            print_addr(&in->op1);
+            printf("\n");
+            break;
+        case IR_READ:
+            /* dst.type nunca es NULL: los read_* tienen ret_type real. */
+            printf("  ");
+            print_addr(&in->dst);
+            printf(" = read %s\n", kel_type_name(in->dst.type));
             break;
         default:
             printf("  <opcode %d sin imprimir>\n", (int)in->op);

@@ -1,0 +1,19 @@
+fn suma(a: int, b: int) -> int {
+  t1 = a + b
+  return t1
+}
+
+fn saluda() {
+  println "hola"
+}
+
+fn main() {
+  param 1
+  param 2
+  t1 = call suma, 2
+  x = t1
+  t2 = read int
+  y = t2
+  call saluda, 0
+  println x
+}

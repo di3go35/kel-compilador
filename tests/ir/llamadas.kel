@@ -1,0 +1,14 @@
+fn suma(a: int, b: int) -> int {
+  return a + b
+}
+
+fn saluda() {
+  println("hola")
+}
+
+fn main() {
+  val x = suma(1, 2)
+  val y = read_int()
+  saluda()
+  println(x)
+}
